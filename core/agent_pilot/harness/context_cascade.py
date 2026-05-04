@@ -547,7 +547,8 @@ class ContextCascade:
         layers_fired: List[str] = []
         events: List[CascadeEvent] = []
 
-        collector: EventCallback = lambda e: events.append(e)
+        def collector(e):
+            return events.append(e)
         self._micro._on_event = collector
         self._auto._on_event = collector
         self._full._on_event = collector

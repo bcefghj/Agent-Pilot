@@ -22,11 +22,13 @@ from typing import Any, Dict, Optional
 
 from core.flow_memory.working import WorkingEvent, WorkingMemory
 from core.security.audit_log import audit
-from core.security.hook_system import HookEvent, HookVeto, default_hooks
+from core.security.hook_system import HookEvent, default_hooks
 from core.security.permission_manager import default_manager
 from core.security.pii_scrubber import scrub_pii
 from core.security.transcript_classifier import (
-    Action, classify_transcript, redact,
+    Action,
+    classify_transcript,
+    redact,
 )
 
 logger = logging.getLogger("flowguard.shield.v3")

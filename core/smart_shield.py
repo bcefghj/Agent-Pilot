@@ -14,20 +14,21 @@ Returns the action the caller (event_handler) should take.
 
 import logging
 import time
-from typing import List
 
 from config import Config
+from core.advanced_features import DecisionRecord, record_decision
 from core.classification_engine import (
-    ClassificationResult, classify, explain,
+    ClassificationResult,
+    classify,
+    explain,
 )
 from core.classification_engine import _contains_urgent_keyword as _contains_urgent_keyword  # noqa: F401
-from core.sender_profile import get_profile, record_incoming
-from llm.llm_client import chat_json, chat
-from llm.prompts import CLASSIFY_PROMPT, AUTO_REPLY_PROMPT
-from memory.user_state import UserState, PendingMessage
+from core.sender_profile import record_incoming
+from llm.llm_client import chat, chat_json
+from llm.prompts import AUTO_REPLY_PROMPT, CLASSIFY_PROMPT
 from memory.interruption_log import InterruptionEvent, log_event
+from memory.user_state import PendingMessage, UserState
 from utils.time_utils import now_ts
-from core.advanced_features import DecisionRecord, record_decision
 
 logger = logging.getLogger("flowguard.shield")
 

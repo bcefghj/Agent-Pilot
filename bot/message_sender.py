@@ -3,7 +3,6 @@
 import json
 import logging
 
-import lark_oapi as lark
 from lark_oapi.api.im.v1 import (
     CreateMessageRequest,
     CreateMessageRequestBody,

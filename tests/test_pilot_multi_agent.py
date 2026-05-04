@@ -1,14 +1,12 @@
 """P6 · MultiAgentPipeline 测试 (Builder-Validator + 5 named agents)."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from dataclasses import dataclass
+from typing import List
 
 import pytest
 
 from core.agent_pilot.application import (
-    AgentReport,
-    AgentTranscript,
     ContextBuildOptions,
     ContextService,
     MultiAgentPipeline,
@@ -17,7 +15,6 @@ from core.agent_pilot.application import (
 )
 from core.agent_pilot.application.task_service import TaskRepository
 from core.agent_pilot.domain import Artifact, ArtifactKind
-
 
 # ── Mock Quality Runner ─────────────────────────────────────────────────────
 

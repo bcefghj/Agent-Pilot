@@ -11,7 +11,7 @@ import json
 import logging
 import urllib.error
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger("flowguard.feishu.board")
 

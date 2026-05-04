@@ -16,11 +16,11 @@ ARCHITECTURE.md §2 Principle 1: "all domain calls must go through the
 runtime layer". No direct LLM/Feishu API calls in domain code.
 """
 
-from .tool_registry import ToolRegistry, ToolMetadata, default_registry  # noqa: F401
 from .hook_runtime import HookRuntime, default_hook_runtime  # noqa: F401
+from .permission_facade import PermissionFacade, default_facade  # noqa: F401
 from .skill_loader import (  # noqa: F401
     SkillLoader,
     SkillManifest,
     default_loader,
 )
-from .permission_facade import PermissionFacade, default_facade  # noqa: F401
+from .tool_registry import ToolMetadata, ToolRegistry, default_registry  # noqa: F401

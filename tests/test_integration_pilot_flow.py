@@ -3,11 +3,7 @@
 Tests the complete pipeline WITHOUT external services (Feishu/LLM mocked).
 """
 
-import json
 import os
-import tempfile
-import threading
-import time
 
 import pytest
 
@@ -19,7 +15,7 @@ class TestFullPilotFlow:
     """Integration: simulate plan creation and execution without LLM calls."""
 
     def test_planner_creates_valid_plan(self):
-        from core.agent_pilot.planner import PilotPlanner, Plan
+        from core.agent_pilot.planner import PilotPlanner
 
         planner = PilotPlanner(chat_json_fn=lambda *a, **k: {})
         plan = planner.plan("帮我把本周讨论整理成产品方案", user_open_id="u_integration")
@@ -29,8 +25,8 @@ class TestFullPilotFlow:
         assert len(plan.steps) > 0
 
     def test_orchestrator_runs_plan_with_mock_tools(self):
-        from core.agent_pilot.planner import PilotPlanner
         from core.agent_pilot.orchestrator import PilotOrchestrator
+        from core.agent_pilot.planner import PilotPlanner
 
         planner = PilotPlanner(chat_json_fn=lambda *a, **k: {})
         plan = planner.plan("起草一份Q3产品规划文档", user_open_id="u_plan_mode")
@@ -41,8 +37,8 @@ class TestFullPilotFlow:
         assert all(s.status == "done" for s in result.steps)
 
     def test_plan_persistence(self):
-        from core.agent_pilot.service import _persist, get_plan
         from core.agent_pilot.planner import PilotPlanner
+        from core.agent_pilot.service import _persist, get_plan
 
         planner = PilotPlanner(chat_json_fn=lambda *a, **k: {})
         plan = planner.plan("写一个技术评审PPT", user_open_id="u_persist")
@@ -53,8 +49,8 @@ class TestFullPilotFlow:
         assert retrieved.intent == plan.intent
 
     def test_list_plans(self):
-        from core.agent_pilot.service import _persist, list_plans
         from core.agent_pilot.planner import PilotPlanner
+        from core.agent_pilot.service import _persist, list_plans
 
         planner = PilotPlanner(chat_json_fn=lambda *a, **k: {})
         plan = planner.plan("test listing", user_open_id="u_list_test_2")
@@ -68,8 +64,8 @@ class TestOrchestratorUnified:
     """Test that the unified orchestrator path works correctly."""
 
     def test_get_orchestrator_returns_conversation_orchestrator(self):
-        from core.agent_pilot.service import get_orchestrator
         from core.agent_pilot.harness import ConversationOrchestrator
+        from core.agent_pilot.service import get_orchestrator
 
         orch = get_orchestrator()
         assert isinstance(orch, ConversationOrchestrator)

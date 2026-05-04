@@ -19,11 +19,11 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
-from .subagent import SubagentRunner, SubagentSpec, SubagentResult, default_subagent_runner
 from .providers import default_providers
+from .subagent import SubagentResult, SubagentRunner, SubagentSpec, default_subagent_runner
 
 logger = logging.getLogger("agent.orchestrator_worker")
 
@@ -195,8 +195,8 @@ class OrchestratorWorker:
         prompt = (
             f"Task: {task}\n\n"
             f"Worker outputs:\n\n" + "\n\n---\n\n".join(pieces) + "\n\n"
-            f"Synthesize a final, coherent answer combining the best of all workers. "
-            f"Resolve any disagreements. Output in Chinese if the task is Chinese."
+            "Synthesize a final, coherent answer combining the best of all workers. "
+            "Resolve any disagreements. Output in Chinese if the task is Chinese."
         )
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: self.providers.chat(

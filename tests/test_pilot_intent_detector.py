@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from core.agent_pilot.application import (
     ChatMessage,
     CooldownManager,
@@ -20,12 +18,10 @@ from core.agent_pilot.application import (
     IntentVerdict,
 )
 from core.agent_pilot.application.intent_detector import (
-    LLMJudgement,
+    _parse_llm_response,
     detect_rules,
     rule_passes,
-    _parse_llm_response,
 )
-
 
 # ── 闸门 1: 规则层 ─────────────────────────────────────────────────────────
 

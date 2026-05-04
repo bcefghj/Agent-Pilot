@@ -64,7 +64,7 @@ def archive_bundle(step, ctx: Dict[str, Any]) -> Dict[str, Any]:
 
 def _try_create_summary_doc(plan_id: str, manifest: Dict[str, Any]) -> str:
     try:
-        from .doc_tool import _try_create_feishu_doc, _try_append_feishu_blocks
+        from .doc_tool import _try_append_feishu_blocks, _try_create_feishu_doc
         title = f"[Agent-Pilot] 汇报摘要 · {plan_id}"
         created = _try_create_feishu_doc(title)
         if not created or not created.get("doc_token"):

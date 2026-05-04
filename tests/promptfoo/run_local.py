@@ -25,7 +25,6 @@ if ROOT not in sys.path:
 
 from core.security.transcript_classifier import classify_transcript  # noqa: E402
 
-
 # ── 30+ 用例（v6 14 用例 + v7 新增 18 用例覆盖 OWASP LLM Top 10）───────────
 
 
@@ -148,7 +147,7 @@ def main(out_path: Optional[str] = None) -> int:
     lines.append(f"- 总用例：**{total}**")
     lines.append(f"- 通过：**{passed}** ({rate:.1%})")
     lines.append(f"- 失败：**{total - passed}**")
-    lines.append(f"- 覆盖：v6 14 用例兼容 + v7 OWASP LLM Top 10 18 用例")
+    lines.append("- 覆盖：v6 14 用例兼容 + v7 OWASP LLM Top 10 18 用例")
     lines.append("")
     lines.append("| ID | 期望 action | 实际 action | score | reason | pass |")
     lines.append("| --- | --- | --- | --- | --- | --- |")

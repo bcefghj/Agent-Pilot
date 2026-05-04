@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Callable, Dict, List, Optional
 
-from ..subagent import SubagentRunner, SubagentSpec, SubagentResult, default_subagent_runner
+from ..subagent import SubagentResult, SubagentRunner, SubagentSpec, default_subagent_runner
 
 
 async def fan_out(

@@ -25,10 +25,13 @@ def create_task_from_message(
 ) -> Dict:
     """Create a Tasks v2 task assigned to ``open_id``."""
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.task.v2 import (  # type: ignore
-            CreateTaskRequest, InputTask, Member,
+            CreateTaskRequest,
+            InputTask,
+            Member,
         )
+
+        from bot.feishu_client import get_client
         client = get_client()
         members: List = [
             Member.builder().id(open_id).id_type("open_id").role("assignee").build()

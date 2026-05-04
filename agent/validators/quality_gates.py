@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from .citation_agent import default_citation_agent
@@ -166,10 +166,10 @@ def majority_vote(answers: List[Dict[str, Any]], *, judge_fn) -> Dict[str, Any]:
     if len(answers) < 2:
         return {"answer": answers[0] if answers else {}, "converged": True}
     judge_prompt = (
-        f"3 independent answers:\n\n"
+        "3 independent answers:\n\n"
         + "\n---\n".join(f"[{i}] {a.get('text', str(a))[:800]}" for i, a in enumerate(answers)) +
-        f"\n\nIs there a majority answer? If 2+ agree, synthesize it. If all 3 differ, note key disagreements.\n"
-        f"Return JSON: {{\"converged\": bool, \"final_answer\": \"...\", \"disagreements\": [\"...\"]}}"
+        "\n\nIs there a majority answer? If 2+ agree, synthesize it. If all 3 differ, note key disagreements.\n"
+        "Return JSON: {\"converged\": bool, \"final_answer\": \"...\", \"disagreements\": [\"...\"]}"
     )
     try:
         import json

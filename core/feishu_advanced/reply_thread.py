@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 logger = logging.getLogger("flowguard.feishu.thread")
 
@@ -12,10 +12,12 @@ logger = logging.getLogger("flowguard.feishu.thread")
 def reply_in_thread(message_id: str, text: str, *, msg_type: str = "text") -> Dict:
     """Reply to ``message_id`` inside its thread instead of posting to the chat root."""
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.im.v1 import (  # type: ignore
-            ReplyMessageRequest, ReplyMessageRequestBody,
+            ReplyMessageRequest,
+            ReplyMessageRequestBody,
         )
+
+        from bot.feishu_client import get_client
         client = get_client()
         if msg_type == "text":
             content = json.dumps({"text": text}, ensure_ascii=False)

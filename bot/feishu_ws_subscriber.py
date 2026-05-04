@@ -24,7 +24,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Callable, Optional, Set
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger("larkmentor.feishu.ws")
 
@@ -109,8 +109,6 @@ class FeishuLongConnection:
     def _open_and_block(self) -> None:
         try:
             import lark_oapi as lark
-            from lark_oapi.api.im.v1 import P2ImMessageReceiveV1
-            from lark_oapi.api.callback import P2CardActionTrigger
         except Exception as e:
             raise RuntimeError(f"lark-oapi WsClient unavailable: {e}") from e
 
@@ -174,7 +172,7 @@ def start_long_connection() -> Optional[FeishuLongConnection]:
         logger.warning("WS subscriber needs FEISHU_APP_ID + FEISHU_APP_SECRET")
         return None
     try:
-        from bot.event_handler import on_message_receive, on_card_action
+        from bot.event_handler import on_card_action, on_message_receive
     except Exception as e:
         logger.warning("WS subscriber cannot import event_handler: %s", e)
         return None

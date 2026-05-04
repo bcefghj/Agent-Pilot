@@ -24,7 +24,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("pilot.harness.mcp_client")
 
@@ -158,8 +158,8 @@ class MCPClient:
 
     def _rpc_http(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            import urllib.request
             import urllib.error
+            import urllib.request
         except Exception as exc:
             raise MCPError(f"urllib unavailable: {exc}")
         req_id = uuid.uuid4().hex[:12]

@@ -9,11 +9,10 @@ import json
 
 import pytest
 
-from bot.pilot_router import PilotRouter, RouterResult
+from bot.pilot_router import PilotRouter
 from core.agent_pilot.application import (
     ContextService,
     IntentDetector,
-    IntentDetectorConfig,
     PlannerService,
     TaskService,
 )

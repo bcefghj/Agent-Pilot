@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 def test_classify_readonly_creates_user_on_demand():
     from core.mcp_server.tools import tool_classify_readonly
@@ -17,8 +15,8 @@ def test_classify_readonly_creates_user_on_demand():
 
 
 def test_classify_readonly_returns_pure_classification(monkeypatch):
-    from memory.user_state import _store, get_user
     from core.mcp_server.tools import tool_classify_readonly
+    from memory.user_state import get_user
 
     u = get_user("u_classify_test")
     u.work_context = "writing report"

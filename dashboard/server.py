@@ -24,7 +24,7 @@ import os
 import random
 import sys
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -34,7 +34,7 @@ DATA_DIR = ROOT / "data"
 STATIC_DIR = Path(__file__).parent / "static"
 
 try:
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Form
+    from fastapi import FastAPI, File, Form, Query, UploadFile, WebSocket, WebSocketDisconnect
     from fastapi.responses import HTMLResponse, JSONResponse
     from fastapi.staticfiles import StaticFiles
 except ImportError as e:
@@ -599,7 +599,8 @@ async def pilot_bitable_hook(body: Dict[str, Any]):
     try:
         from core.agent_pilot.service import launch
         from core.feishu_advanced.bitable_agent import (
-            build_intent_from_fields, writeback_ai_result,
+            build_intent_from_fields,
+            writeback_ai_result,
         )
         data = body or {}
         intent = build_intent_from_fields(data.get("fields") or {}, data.get("intent_template", ""))
@@ -743,9 +744,10 @@ async def pilot_voice_transcribe(
     Flutter uploads an ``audio`` m4a file captured by `package:record`.
     """
     try:
-        from core.agent_pilot.tools.voice_tool import voice_transcribe
-        from core.agent_pilot.planner import PlanStep
         import tempfile
+
+        from core.agent_pilot.planner import PlanStep
+        from core.agent_pilot.tools.voice_tool import voice_transcribe
 
         args: Dict[str, Any] = {"open_id": open_id}
         if minute_token:

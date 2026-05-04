@@ -17,7 +17,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger("pilot.tool.canvas")
 
@@ -177,7 +177,8 @@ def _try_create_feishu_board(title: str) -> Optional[str]:
         if not tat:
             return None
         import json as _json
-        import urllib.request, urllib.error
+        import urllib.error
+        import urllib.request
         req = urllib.request.Request(
             "https://open.feishu.cn/open-apis/board/v1/whiteboards",
             data=_json.dumps({"name": title}).encode("utf-8"),

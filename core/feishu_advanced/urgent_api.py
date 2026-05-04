@@ -21,11 +21,16 @@ def _send(message_id: str, open_ids: List[str], kind: str, *, actor: str) -> Dic
         return {"ok": False, "reason": decision.reason}
 
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.im.v1 import (  # type: ignore
-            UrgentAppMessageRequest, UrgentSmsMessageRequest, UrgentPhoneMessageRequest,
-            UrgentAppMessageRequestBody, UrgentSmsMessageRequestBody, UrgentPhoneMessageRequestBody,
+            UrgentAppMessageRequest,
+            UrgentAppMessageRequestBody,
+            UrgentPhoneMessageRequest,
+            UrgentPhoneMessageRequestBody,
+            UrgentSmsMessageRequest,
+            UrgentSmsMessageRequestBody,
         )
+
+        from bot.feishu_client import get_client
         client = get_client()
         if kind == "app":
             req = (

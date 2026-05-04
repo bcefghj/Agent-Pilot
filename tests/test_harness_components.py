@@ -1,7 +1,6 @@
 """Tests for the harness components: ToolRegistry, HookSystem, Permissions, etc."""
 
 import os
-import pytest
 
 os.environ.setdefault("FEISHU_APP_ID", "test")
 os.environ.setdefault("FEISHU_APP_SECRET", "test")
@@ -82,7 +81,7 @@ class TestHookRegistry:
         assert reg is not None
 
     def test_hook_registration(self):
-        from core.agent_pilot.harness import HookRegistry, HookEvent
+        from core.agent_pilot.harness import HookEvent, HookRegistry
 
         reg = HookRegistry()
         reg.register(HookEvent.PRE_TOOL_USE, lambda ctx: None)

@@ -28,7 +28,6 @@ mounted from ``dashboard/server.py`` when available.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import hmac
 import json
 import logging
@@ -102,7 +101,7 @@ if _FASTAPI:
             except Exception:
                 pass
 
-        sub = hub.subscribe(client_id, _send)
+        hub.subscribe(client_id, _send)
         await ws.send_text(json.dumps({"kind": "hello", "client_id": client_id}))
 
         async def _sender():

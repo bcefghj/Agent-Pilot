@@ -12,13 +12,13 @@ from __future__ import annotations
 
 from typing import Callable, Dict
 
-from .doc_tool import doc_create, doc_append
-from .canvas_tool import canvas_create, canvas_add_shape
-from .slide_tool import slide_generate, slide_rehearse
-from .voice_tool import voice_transcribe
 from .archive_tool import archive_bundle
+from .canvas_tool import canvas_add_shape, canvas_create
+from .doc_tool import doc_append, doc_create
 from .im_tool import im_fetch_thread, im_send_message
 from .mentor_tool import mentor_clarify, mentor_summarize
+from .slide_tool import slide_generate, slide_rehearse
+from .voice_tool import voice_transcribe
 
 
 def build_default_registry() -> Dict[str, Callable]:

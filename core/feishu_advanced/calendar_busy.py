@@ -14,10 +14,13 @@ def create_busy_event(
 ) -> Dict:
     """Create a single-tenant busy event in the user's primary calendar."""
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.calendar.v4 import (  # type: ignore
-            CreateCalendarEventRequest, CalendarEvent, TimeInfo,
+            CalendarEvent,
+            CreateCalendarEventRequest,
+            TimeInfo,
         )
+
+        from bot.feishu_client import get_client
         client = get_client()
         # Locate the primary calendar for this user.
         primary_id = _get_primary_calendar_id(open_id)
@@ -55,8 +58,9 @@ def create_busy_event(
 
 def _get_primary_calendar_id(open_id: str) -> str:
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.calendar.v4 import ListCalendarRequest  # type: ignore
+
+        from bot.feishu_client import get_client
         client = get_client()
         req = ListCalendarRequest.builder().user_id_type("open_id").build()
         resp = client.calendar.v4.calendar.list(req)

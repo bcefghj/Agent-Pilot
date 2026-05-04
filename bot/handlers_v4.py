@@ -11,8 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger("bot.handlers_v4")
 
@@ -146,7 +145,6 @@ def _cmd_plan(intent_text: str, *, user_open_id: str, tenant_id: str) -> Dict[st
         return {"ok": True, "reply": "用法: /plan <描述你的意图>"}
     from agent.router import default_router
     dec = default_router().route(intent_text)
-    from agent.orchestrator_worker import default_orchestrator_worker
     # Just run lead plan, don't spawn workers
     providers = __import__('agent.providers', fromlist=['default_providers']).default_providers()
     prompt = (
@@ -219,7 +217,7 @@ def _cmd_quality(plan_id: str) -> Dict[str, Any]:
         if not candidates:
             return {"ok": True, "reply": "未找到 plan，先跑 /pilot <任务>"}
         content = candidates[0].read_text()
-    except Exception as e:
+    except Exception:
         content = plan_id
     report = runner.run(content)
     return {"ok": True, "reply": json.dumps(report.as_dict(), ensure_ascii=False, indent=2), "data": report.as_dict()}

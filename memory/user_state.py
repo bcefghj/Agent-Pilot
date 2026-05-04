@@ -13,7 +13,7 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -23,7 +23,7 @@ try:
 except ImportError:
     _HAS_FCNTL = False
 
-from utils.time_utils import now_cst, now_ts, fmt_time
+from utils.time_utils import fmt_time, now_cst, now_ts
 
 logger = logging.getLogger("flowguard.state")
 

@@ -4,22 +4,23 @@ LarkMentor – 飞书 AI 协作伙伴：消息守护 + 表达引导
 主入口：启动飞书长连接 + 卡片回调 + 定时任务 + 日历轮询 + Mentor 周日摘要
 """
 
-import sys
-import os
 import logging
+import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import lark_oapi as lark
 
+from bot.event_handler import on_card_action, on_message_receive, set_scheduler
 from config import Config
-from bot.event_handler import on_message_receive, on_card_action, set_scheduler
-from core.analytics import send_all_daily_reports
-from memory.user_state import load_all, _load_org_docs
-from core.sender_profile import load as load_sender_profiles, decay_recent_counts
-from core.notification_channels import init_dispatcher
 from core.advanced_features import load as load_decisions
+from core.analytics import send_all_daily_reports
 from core.feishu_workspace_init import load_all as load_workspaces
+from core.notification_channels import init_dispatcher
+from core.sender_profile import decay_recent_counts
+from core.sender_profile import load as load_sender_profiles
+from memory.user_state import _load_org_docs, load_all
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,10 +87,10 @@ def _start_scheduler():
 def _poll_calendar():
     """Check calendar events and auto-enter/exit focus mode."""
     try:
-        from utils.feishu_api import get_current_calendar_events
-        from memory.user_state import all_users
-        from core.context_recall import capture_snapshot
         from bot.message_sender import send_text
+        from core.context_recall import capture_snapshot
+        from memory.user_state import all_users
+        from utils.feishu_api import get_current_calendar_events
 
         events = get_current_calendar_events()
         if not events:
@@ -115,8 +116,8 @@ def _poll_calendar():
 def _coach_weekly_growth_summary():
     """Sunday 21:00 cron · write a weekly growth summary for every active user."""
     try:
-        from memory.user_state import all_users
         from core.mentor.growth_doc import write_weekly_summary
+        from memory.user_state import all_users
 
         for user in all_users():
             if not getattr(user, "rookie_mode", False):

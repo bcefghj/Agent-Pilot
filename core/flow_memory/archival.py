@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -53,13 +52,14 @@ def _append_jsonl(entry: ArchivalEntry) -> None:
 def _try_write_bitable(entry: ArchivalEntry) -> Optional[str]:
     """Best-effort Bitable write. Returns record_id or None."""
     try:
-        from core.feishu_workspace_init import get_workspace
-        from bot.feishu_client import get_client
         from lark_oapi.api.bitable.v1 import (
+            AppTableRecord,
             CreateAppTableRecordRequest,
             CreateAppTableRecordRequestBody,
-            AppTableRecord,
         )
+
+        from bot.feishu_client import get_client
+        from core.feishu_workspace_init import get_workspace
 
         ws = get_workspace(entry.open_id)
         if not (ws.bitable_app_token and ws.bitable_table_id):

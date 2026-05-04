@@ -1,7 +1,6 @@
 """Performance tests: concurrent users, latency bounds, resource limits."""
 
 import os
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -118,8 +117,8 @@ class TestChaosResilience:
     """Chaos tests: simulate failures and verify graceful degradation."""
 
     def test_orchestrator_handles_tool_failure(self):
-        from core.agent_pilot.planner import Plan, PlanStep
         from core.agent_pilot.orchestrator import PilotOrchestrator
+        from core.agent_pilot.planner import Plan, PlanStep
 
         def failing_tool(step, ctx):
             raise RuntimeError("simulated tool failure")
@@ -138,9 +137,8 @@ class TestChaosResilience:
         assert "simulated tool failure" in result.steps[0].error
 
     def test_orchestrator_handles_timeout_tool(self):
-        import signal
-        from core.agent_pilot.planner import Plan, PlanStep
         from core.agent_pilot.orchestrator import PilotOrchestrator
+        from core.agent_pilot.planner import Plan, PlanStep
 
         def slow_tool(step, ctx):
             time.sleep(0.5)
@@ -159,8 +157,8 @@ class TestChaosResilience:
         assert result.steps[0].status == "done"
 
     def test_orchestrator_skips_missing_tool(self):
-        from core.agent_pilot.planner import Plan, PlanStep
         from core.agent_pilot.orchestrator import PilotOrchestrator
+        from core.agent_pilot.planner import Plan, PlanStep
 
         orch = PilotOrchestrator(tool_registry={})
         plan = Plan(

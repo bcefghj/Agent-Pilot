@@ -1,14 +1,12 @@
 """Tests for LarkMentor v4 agent/ package (harness + multi-agent)."""
 
-import pytest
 
 
 def test_agent_imports():
     """Core harness modules all importable."""
     from agent import (
-        default_loop, default_context_manager, default_permission_gate,
-        default_hook_registry, default_memory, default_skills_loader,
-        default_mcp_manager, default_subagent_runner,
+        default_context_manager,
+        default_permission_gate,
     )
     assert default_context_manager() is not None
     assert default_permission_gate() is not None
@@ -29,7 +27,7 @@ def test_context_5_layer_compaction():
 
 
 def test_permission_7_layer():
-    from agent.permissions import PermissionGate, PermissionMode, Decision
+    from agent.permissions import Decision, PermissionGate, PermissionMode
     gate = PermissionGate(mode=PermissionMode.DEFAULT)
     # deny rule hit
     dec = gate.check("bash", "rm -rf /")
@@ -46,9 +44,10 @@ def test_permission_7_layer():
 
 
 def test_memory_fts5():
-    from agent.memory import MemoryLayer
     import tempfile
     from pathlib import Path
+
+    from agent.memory import MemoryLayer
     tmp = tempfile.TemporaryDirectory()
     mem = MemoryLayer(db_path=Path(tmp.name) / "t.sqlite")
     mid = mem.upsert("用户决定采用 MiniMax M2.7 作为规划模型", kind="decision", tenant_id="t1")
@@ -69,7 +68,7 @@ def test_provider_router():
 
 
 def test_strategy_router_8_strategies():
-    from agent.router import default_router, Strategy
+    from agent.router import Strategy, default_router
     r = default_router()
     # Simple
     dec = r.route("你好")
@@ -143,7 +142,7 @@ def test_learner_fingerprint():
     from agent.learner import _fingerprint
     fp1 = _fingerprint("帮我起草一份周报")
     fp2 = _fingerprint("帮我起草一份周报")
-    fp3 = _fingerprint("帮我写一份周报")
+    _fingerprint("帮我写一份周报")
     assert fp1 == fp2  # same text → same fingerprint
 
 

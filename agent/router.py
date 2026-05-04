@@ -118,11 +118,11 @@ class StrategyRouter:
         elif complexity < 0.3:
             strategy = Strategy.SIMPLE
             recommended = ["@responder"]
-            rationale.append(f"low complexity → Simple")
+            rationale.append("low complexity → Simple")
         else:
             strategy = Strategy.DAG
             recommended = ["@planner", "@workers(3)"]
-            rationale.append(f"mid complexity → DAG")
+            rationale.append("mid complexity → DAG")
 
         return RouteDecision(
             strategy=strategy, complexity=complexity,

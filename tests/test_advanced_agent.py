@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from core.agent_pilot.advanced import (
     diagnose_intent,
-    summarise_messages,
     recommend_next_steps,
+    summarise_messages,
 )
 from core.agent_pilot.planner import PilotPlanner
 

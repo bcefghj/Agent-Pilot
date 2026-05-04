@@ -18,7 +18,6 @@ Cost budget：per plan 0.5 CNY，超预算降级到 DeepSeek。
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import threading

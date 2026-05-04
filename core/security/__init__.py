@@ -15,20 +15,33 @@ The modules are intentionally small and composable so the security pipeline
 can be reordered or mocked in tests.
 """
 
-from .permission_manager import PermissionManager, PermissionLevel  # noqa: F401
-from .transcript_classifier import classify_transcript, InjectionVerdict  # noqa: F401
-from .hook_system import HookSystem, HookEvent  # noqa: F401
-from .pii_scrubber import scrub_pii, PIIReport  # noqa: F401
-from .audit_log import audit, query_audit, AuditEntry  # noqa: F401
+from .audit_log import AuditEntry, audit, query_audit  # noqa: F401
+from .hook_system import HookEvent, HookSystem  # noqa: F401
 from .keyword_denylist import (  # noqa: F401
-    KeywordDenylist, DenyHit,
-    default_denylist, check_text as denylist_check,
+    DenyHit,
+    KeywordDenylist,
+    default_denylist,
 )
+from .keyword_denylist import (
+    check_text as denylist_check,
+)
+from .permission_manager import PermissionLevel, PermissionManager  # noqa: F401
+from .pii_scrubber import PIIReport, scrub_pii  # noqa: F401
 from .rate_limiter import (  # noqa: F401
-    RateLimiter, RateDecision,
-    default_limiter, acquire as ratelimit_acquire,
+    RateDecision,
+    RateLimiter,
+    default_limiter,
+)
+from .rate_limiter import (
+    acquire as ratelimit_acquire,
 )
 from .tool_sandbox import (  # noqa: F401
-    ToolSandbox, SandboxProfile, SandboxDecision,
-    default_sandbox, check as sandbox_check,
+    SandboxDecision,
+    SandboxProfile,
+    ToolSandbox,
+    default_sandbox,
 )
+from .tool_sandbox import (
+    check as sandbox_check,
+)
+from .transcript_classifier import InjectionVerdict, classify_transcript  # noqa: F401

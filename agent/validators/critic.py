@@ -8,8 +8,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import List, Optional
 
 logger = logging.getLogger("agent.validators.critic")
 
@@ -46,8 +46,8 @@ class ContentCritic:
             f"原任务：{task}\n\n"
             f"待审内容：\n{content[:4000]}\n\n"
             f"审查维度：\n" + "\n".join(f"- {r}" for r in rubric) + "\n\n"
-            f"严格审查并以 JSON 返回：\n"
-            f'{{"score": 0-1 浮点数, "issues": ["..."], "improvements": ["..."], "strengths": ["..."], "verdict": "pass" | "minor_issues" | "needs_rework"}}'
+            "严格审查并以 JSON 返回：\n"
+            '{"score": 0-1 浮点数, "issues": ["..."], "improvements": ["..."], "strengths": ["..."], "verdict": "pass" | "minor_issues" | "needs_rework"}'
         )
         try:
             from ..providers import default_providers

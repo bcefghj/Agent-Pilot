@@ -1,9 +1,6 @@
 """P4 · ContextService 上下文构建测试 (PRD §7 + Q4)."""
 from __future__ import annotations
 
-import os
-import tempfile
-
 import pytest
 
 from core.agent_pilot.application import (
@@ -12,13 +9,11 @@ from core.agent_pilot.application import (
     parse_feishu_doc_token,
 )
 from core.agent_pilot.domain import (
-    ContextPack,
     MaterialKind,
     SourceDoc,
     SourceMessage,
     UserMaterial,
 )
-
 
 # ── 飞书 doc_token 解析 ────────────────────────────────────────────────────
 

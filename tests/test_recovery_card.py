@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 
 def _make_user_with_blocked(open_id="u_test_recovery"):
     """Helper: seed working_memory with 4 blocked messages of mixed levels."""
-    from core.flow_memory.working import WorkingMemory, WorkingEvent
+    from core.flow_memory.working import WorkingEvent, WorkingMemory
     wm = WorkingMemory.load(open_id)
     wm.events = []
     base_ts = int(time.time()) - 1000
@@ -97,7 +95,7 @@ def test_blocked_message_short_content():
 
 
 def test_draft_three_versions_falls_back_when_llm_unavailable():
-    from core.recovery_card import draft_three_versions, BlockedMessage
+    from core.recovery_card import BlockedMessage, draft_three_versions
 
     msg = BlockedMessage(
         sender_name="王经理", sender_id="u9",

@@ -8,7 +8,7 @@ dashboard / tests can enumerate available scenarios.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
 
 @dataclass

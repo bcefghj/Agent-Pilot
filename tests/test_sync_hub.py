@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
-from core.sync.crdt_hub import CrdtHub, broadcast_event, broadcast_state, default_hub
 from core.sync import offline_merge
-
+from core.sync.crdt_hub import CrdtHub, broadcast_event, broadcast_state, default_hub
 
 # ─────────────────────────── Basic pub/sub ───────────────────────
 

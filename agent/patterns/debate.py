@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict
 
 logger = logging.getLogger("agent.patterns.debate")
 
@@ -32,12 +32,12 @@ def debate_round(
         f"Question: {question}\n\n"
         f"3 independent answers:\n"
         + "\n---\n".join(f"[{a['model']}]: {a['text']}" for a in answers) +
-        f"\n\n"
-        f"Tasks:\n"
-        f"1. Determine if these answers agree (2 of 3 is majority).\n"
-        f"2. If agree → synthesize a final answer using the majority.\n"
-        f"3. If 3 disagree → write down the key disagreement points for a debate round.\n"
-        f"Respond as JSON: {{\"converged\": true|false, \"final_answer\": \"...\", \"disagreements\": [\"...\"]}}"
+        "\n\n"
+        "Tasks:\n"
+        "1. Determine if these answers agree (2 of 3 is majority).\n"
+        "2. If agree → synthesize a final answer using the majority.\n"
+        "3. If 3 disagree → write down the key disagreement points for a debate round.\n"
+        "Respond as JSON: {\"converged\": true|false, \"final_answer\": \"...\", \"disagreements\": [\"...\"]}"
     )
     judgement = llm_judge(judge_prompt)
     try:

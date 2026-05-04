@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import ipaddress
 import logging
-import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 logger = logging.getLogger("agent.attachments")
@@ -49,7 +48,7 @@ def download_attachment(
     session_id: str = "", max_size: int = MAX_FILE_SIZE,
 ) -> Dict[str, Any]:
     """Download attachment to data/attachments/{session_id}/.
-    
+
     Supports two sources:
     1. HTTP URL (SSRF-protected)
     2. Feishu file_key (via lark-oapi download)
@@ -83,8 +82,7 @@ def download_attachment(
     if file_key:
         try:
             from bot.feishu_client import get_client
-            client = get_client()
-            from lark_oapi.api.im.v1 import GetMessageResourceRequest
+            get_client()
             # Simplified; actual API needs message_id + file_key
             return {"ok": False, "error": "file_key download not fully wired; use ShanClaw reference"}
         except Exception as e:

@@ -209,13 +209,13 @@ def main():
     summary = summarize(results)
 
     print(f"\n{'='*70}")
-    print(f"LarkMentor Classification Engine - Test Report")
+    print("LarkMentor Classification Engine - Test Report")
     print(f"{'='*70}")
     print(f"Scenarios: {summary['total']}")
     print(f"Passed:    {summary['passed']}")
     print(f"Accuracy:  {summary['accuracy']*100:.1f}%")
     print(f"Time:      {elapsed:.2f}s")
-    print(f"\nBy category:")
+    print("\nBy category:")
     for cat, v in summary["by_category"].items():
         pct = v['passed'] / v['total'] * 100 if v['total'] else 0
         print(f"  {cat:20s} {v['passed']}/{v['total']:3d}  ({pct:.1f}%)")

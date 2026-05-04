@@ -26,7 +26,6 @@ from ..domain import (
     EventBus,
     Task,
     TaskEvent,
-    TaskState,
     default_event_bus,
 )
 

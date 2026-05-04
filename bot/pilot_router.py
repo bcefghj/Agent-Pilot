@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from core.agent_pilot.application import (
@@ -56,6 +56,7 @@ from core.agent_pilot.domain import (
     TaskEvent,
     TaskState,
 )
+
 from . import cards_pilot
 
 logger = logging.getLogger("bot.pilot_router")
@@ -509,8 +510,8 @@ class PilotRouter:
     def _async_generate_ppt(self, task: Task, actor_open_id: str) -> None:
         """Generate PPT from existing doc artifacts."""
         try:
-            from core.agent_pilot.tools.slide_tool import slide_generate
             from core.agent_pilot.domain import PlanStep as DomainPlanStep
+            from core.agent_pilot.tools.slide_tool import slide_generate
 
             self._send_progress(actor_open_id, task.task_id, 0.5, "正在生成演示文稿...")
 

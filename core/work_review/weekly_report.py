@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, Optional
 
 from core.flow_memory.archival import query_archival, write_archival_summary
 from core.flow_memory.working import WorkingMemory

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .registry import tool
 
@@ -26,8 +26,8 @@ def triage_message(
 ) -> Dict[str, Any]:
     """原 core.smart_shield_v3.process_message_v3 的薄 wrapper."""
     try:
-        from memory.user_state import get_user
         from core.smart_shield_v3 import process_message_v3
+        from memory.user_state import get_user
         user = get_user(user_open_id) if user_open_id else None
         if user is None:
             return {

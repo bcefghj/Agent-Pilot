@@ -6,20 +6,22 @@ import time
 
 import pytest
 
-from core.flow_memory.archival import write_archival_summary, query_archival
+from core.flow_memory.archival import write_archival_summary
 from core.flow_memory.working import WorkingEvent, WorkingMemory
 from core.mcp_server.tools import (
-    TOOL_REGISTRY, call_tool, list_tools, tool_query_memory,
+    call_tool,
+    list_tools,
+    tool_query_memory,
 )
-from core.work_review.weekly_report import generate_weekly_report
 from core.work_review.monthly_wrapped import generate_monthly_wrapped
+from core.work_review.weekly_report import generate_weekly_report
 
 
 @pytest.fixture
 def isolated_data(tmp_path, monkeypatch):
     """Redirect the four data dirs to a tmp space so tests don't pollute."""
-    import core.flow_memory.working as wm
     import core.flow_memory.archival as ar
+    import core.flow_memory.working as wm
     import core.security.audit_log as al
 
     monkeypatch.setattr(wm, "WM_DIR", tmp_path / "wm")

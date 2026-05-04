@@ -1,13 +1,13 @@
 """Tests for Flow Detector module."""
 
-import sys
 import os
+import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from memory.user_state import get_user, FocusMode
-from core.flow_detector import parse_command, get_status_text
+from core.flow_detector import get_status_text, parse_command
+from memory.user_state import get_user
 
 
 class TestParseCommand(unittest.TestCase):

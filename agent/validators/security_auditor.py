@@ -49,7 +49,7 @@ class SecurityAuditor:
         ]
         for pat in injection_patterns:
             if re.search(pat, text, re.IGNORECASE):
-                report.findings.append(f"potential prompt injection pattern")
+                report.findings.append("potential prompt injection pattern")
                 if report.severity == "low":
                     report.severity = "medium"
 

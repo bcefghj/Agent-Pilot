@@ -12,11 +12,14 @@ import time as _time
 # v4 统一入口（new!）
 _USE_V4_HANDLERS = True  # feature flag; set False to disable v4 routing
 try:
-    from bot.handlers_v4 import handle_message as _v4_handle_message, classify_intent as _v4_classify
+    from bot.handlers_v4 import classify_intent as _v4_classify
+    from bot.handlers_v4 import handle_message as _v4_handle_message
 except Exception as _e:
     _USE_V4_HANDLERS = False
     _v4_handle_message = None  # type: ignore
     _v4_classify = None  # type: ignore
+
+import os as _os
 
 import lark_oapi as lark
 from lark_oapi.event.callback.model.p2_card_action_trigger import (
@@ -24,54 +27,71 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTriggerResponse,
 )
 
-from memory.user_state import (
-    get_user, add_org_doc, ACHIEVEMENT_DEFS,
-)
-from core.flow_detector import parse_command, get_status_text
+from core.flow_detector import get_status_text, parse_command
 from core.smart_shield import process_message  # legacy v1 compat
 from core.smart_shield_v3 import process_message_v3 as _process_message_v3
-import os as _os
+from memory.user_state import (
+    ACHIEVEMENT_DEFS,
+    add_org_doc,
+    get_user,
+)
+
 _USE_V3_MAIN_CHAIN = _os.getenv("LARKMENTOR_USE_V3_MAIN_CHAIN", "1") != "0"
 _active_process_message = _process_message_v3 if _USE_V3_MAIN_CHAIN else process_message
-from core.context_recall import capture_snapshot, generate_recovery
-from core.analytics import get_report_text, send_daily_report_to_user
-from core.rookie_buddy import review_message, generate_task_confirmation, generate_weekly_report  # legacy v3 compat
-from core.mentor import (
-    mentor_write as v4_write,
-    mentor_task as v4_task,
-    mentor_review as v4_weekly,
-    mentor_router as v4_router,
-    knowledge_base as v4_kb,
-    proactive_hook as v4_proactive,
-    growth_doc as v4_growth,
-    mentor_onboard,
-)
-from bot.message_sender import send_text, reply_text, send_card, reply_card
 from bot.card_builder import (
-    focus_started_card,
-    urgent_alert_card,
-    batch_reminder_card,
-    recovery_card,
-    help_card,
-    rookie_review_card,
     achievement_card,
     achievements_list_card,
-    workspace_welcome_card,
     first_time_welcome_card,
-    mentor_review_card,
+    focus_started_card,
+    help_card,
     mentor_clarify_card,
-    mentor_weekly_card,
     mentor_growth_card,
     mentor_proactive_card,
+    mentor_review_card,
+    mentor_weekly_card,
+    recovery_card,
+    urgent_alert_card,
+    workspace_welcome_card,
 )
-from core.feishu_workspace_init import (
-    ensure_workspace, workspace_summary_for_card, append_recovery_card,
-    get_workspace,
-)
-from core.advanced_features import (
-    list_recent_decisions, rollback_decision, explain_decision,
-)
+from bot.message_sender import reply_text, send_card, send_text
 from config import Config
+from core.advanced_features import (
+    explain_decision,
+    list_recent_decisions,
+    rollback_decision,
+)
+from core.analytics import get_report_text
+from core.context_recall import capture_snapshot, generate_recovery
+from core.feishu_workspace_init import (
+    append_recovery_card,
+    ensure_workspace,
+    get_workspace,
+    workspace_summary_for_card,
+)
+from core.mentor import (
+    growth_doc as v4_growth,
+)
+from core.mentor import (
+    knowledge_base as v4_kb,
+)
+from core.mentor import (
+    mentor_onboard,
+)
+from core.mentor import (
+    mentor_review as v4_weekly,
+)
+from core.mentor import (
+    mentor_router as v4_router,
+)
+from core.mentor import (
+    mentor_task as v4_task,
+)
+from core.mentor import (
+    mentor_write as v4_write,
+)
+from core.mentor import (
+    proactive_hook as v4_proactive,
+)
 
 logger = logging.getLogger("flowguard.handler")
 
@@ -81,8 +101,8 @@ logger = logging.getLogger("flowguard.handler")
 def _wm_append(open_id: str, kind: str, payload: dict = None):
     """Best-effort append to v3 WorkingMemory. Never raises."""
     try:
-        from core.flow_memory.working import WorkingMemory, WorkingEvent
         from core.flow_memory.compaction import compact_session
+        from core.flow_memory.working import WorkingEvent, WorkingMemory
         wm = WorkingMemory.load(open_id)
         ev = WorkingEvent(ts=int(_time.time()), kind=kind, payload=payload or {})
         spilled = wm.append(ev)
@@ -706,8 +726,8 @@ def _do_handle(data):
 
     if command == "pilot_skills":
             try:
-                from core.agent_pilot.harness import default_skills
                 from bot.card_v2 import skills_list_card
+                from core.agent_pilot.harness import default_skills
                 skills = [{"name": s.name, "description": s.description,
                            "source": s.source, "version": s.version,
                            "path": s.path}
@@ -805,6 +825,7 @@ def _do_handle(data):
                 import threading as _th
                 def _notify_when_done():
                     import time as _t2
+
                     from core.agent_pilot.service import get_plan as _gp
                     start = _t2.time()
                     while _t2.time() - start < 180:
@@ -867,7 +888,7 @@ def _do_handle(data):
                 lines = [f"🎵 **{card_data.headline}**\n"]
                 for b in card_data.bullets:
                     lines.append(f"• {b}")
-                lines.append(f"\n📊 统计：")
+                lines.append("\n📊 统计：")
                 for k, v in card_data.stats.items():
                     lines.append(f"  - {k}: {v}")
                 send_text(open_id, "\n".join(lines))
@@ -948,7 +969,7 @@ def _do_handle(data):
             try:
                 token = v4_growth.ensure_growth_doc(open_id)
                 if token:
-                    send_text(open_id, f"📓 已为你创建《我的新手成长记录》Docx，发送 `我的成长档案` 拿链接。")
+                    send_text(open_id, "📓 已为你创建《我的新手成长记录》Docx，发送 `我的成长档案` 拿链接。")
             except Exception:
                 pass
             # 触发 onboarding 流（如果还没做过）

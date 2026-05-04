@@ -70,8 +70,9 @@ def im_send_message(step, ctx: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": "chat_id and text required"}
 
     try:
-        from bot.feishu_client import get_client
         import lark_oapi.api.im.v1 as im_api
+
+        from bot.feishu_client import get_client
         client = get_client()
         content = json.dumps({"text": text})
         req = (
@@ -116,8 +117,9 @@ def _try_fetch_real(chat_id: str, limit: int) -> List[Dict[str, Any]]:
     if not chat_id:
         return []
     try:
-        from bot.feishu_client import get_client
         import lark_oapi.api.im.v1 as im_api
+
+        from bot.feishu_client import get_client
         client = get_client()
 
         all_messages: List[Dict[str, Any]] = []

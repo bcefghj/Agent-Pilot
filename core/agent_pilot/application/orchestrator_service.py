@@ -26,12 +26,16 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from ..domain import (
     Plan as DomainPlan,
+)
+from ..domain import (
     PlanStep as DomainPlanStep,
+)
+from ..domain import (
     Task,
     TaskEvent,
     TaskState,
@@ -41,7 +45,6 @@ from ..domain.events import (
     EVT_STEP_DONE,
     EVT_STEP_FAILED,
     EVT_STEP_STARTED,
-    DomainEvent,
     EventBus,
     default_event_bus,
     make_event,

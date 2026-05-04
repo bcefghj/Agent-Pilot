@@ -21,13 +21,13 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from .context import default_context_manager, ContextManager
-from .permissions import default_permission_gate, PermissionGate, Decision
-from .hooks import default_hook_registry, HookRegistry, HookEvent
-from .memory import default_memory, MemoryLayer
-from .skills import default_skills_loader, SkillsLoader
-from .mcp import default_mcp_manager, MCPManager
-from .subagent import default_subagent_runner, SubagentRunner
+from .context import ContextManager, default_context_manager
+from .hooks import HookEvent, HookRegistry, default_hook_registry
+from .mcp import MCPManager, default_mcp_manager
+from .memory import MemoryLayer, default_memory
+from .permissions import Decision, PermissionGate, default_permission_gate
+from .skills import SkillsLoader, default_skills_loader
+from .subagent import SubagentRunner, default_subagent_runner
 
 logger = logging.getLogger("agent.loop")
 
@@ -120,9 +120,11 @@ class AgentLoop:
         t = time.time()
         step = LoopStep(index=1, name="settings_resolution")
         settings = self._resolve_settings()
-        step.status = "ok"; step.duration_ms = int((time.time() - t) * 1000)
+        step.status = "ok"
+        step.duration_ms = int((time.time() - t) * 1000)
         step.detail = {"providers": list(settings.get("providers", {}).keys())}
-        steps.append(step); self._emit(step)
+        steps.append(step)
+        self._emit(step)
 
         # ── Step 2: State init ──
         t = time.time()

@@ -3,7 +3,6 @@ exercise the Agent-Pilot endpoints end-to-end."""
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 from core.flow_memory.compaction import compact_session, micro_compact, session_compact
 from core.flow_memory.flow_memory_md import resolve_memory_md, write_tier
 from core.flow_memory.working import WorkingEvent, WorkingMemory

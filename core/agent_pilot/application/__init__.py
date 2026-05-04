@@ -13,39 +13,39 @@
 - ``repository``: JSON 持久化（task_repo / artifact_repo / audit_repo）
 """
 from .context_service import (
-    ContextService,
     ContextBuildOptions,
+    ContextService,
     default_context_service,
     parse_feishu_doc_token,
 )
+from .intent_detector import (
+    ChatMessage,
+    CooldownManager,
+    IntentDetector,
+    IntentDetectorConfig,
+    IntentVerdict,
+    TaskCandidate,
+)
 from .learner import (
+    GeneratedSkill,
     PilotLearner,
     TaskMemory,
-    GeneratedSkill,
     default_pilot_learner,
 )
 from .memory_inject import (
+    attach_memory_to_default_services,
     make_memory_resolver_adapter,
     wrap_llm_with_memory,
-    attach_memory_to_default_services,
 )
-from .multi_agent_pipeline import MultiAgentPipeline, AgentReport, AgentTranscript
-from .orchestrator_service import OrchestratorService, OrchestratorConfig
+from .multi_agent_pipeline import AgentReport, AgentTranscript, MultiAgentPipeline
+from .orchestrator_service import OrchestratorConfig, OrchestratorService
 from .planner_service import (
-    PlannerService,
     PatternSelection,
+    PlannerService,
     ReasoningPattern,
     select_reasoning_pattern,
 )
 from .task_service import TaskService, default_task_service
-from .intent_detector import (
-    IntentDetector,
-    IntentDetectorConfig,
-    IntentVerdict,
-    ChatMessage,
-    TaskCandidate,
-    CooldownManager,
-)
 
 
 def default_orchestrator_service() -> OrchestratorService:

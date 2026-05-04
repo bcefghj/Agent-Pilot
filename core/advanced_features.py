@@ -12,10 +12,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional
 
-from utils.time_utils import now_ts, fmt_time
+from utils.time_utils import fmt_time
 
 logger = logging.getLogger("flowguard.advanced")
 

@@ -217,7 +217,7 @@ class PermissionGate:
     def check(self, tool: str, tool_input: Any) -> PermissionDecision:
         """Main permission check entry."""
         input_repr = str(tool_input) if not isinstance(tool_input, str) else tool_input
-        signature = f"{tool}({input_repr[:120]})"
+        f"{tool}({input_repr[:120]})"
 
         # Persistent always-allow (from previous user approval)
         if self._persistent_allows.get(tool):

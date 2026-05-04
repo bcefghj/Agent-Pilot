@@ -11,10 +11,13 @@ logger = logging.getLogger("flowguard.feishu.reaction")
 def add_reaction(message_id: str, emoji_type: str = "EYES") -> Dict:
     """Add an emoji reaction (defaults to 👀 for low-friction P3 ack)."""
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.im.v1 import (  # type: ignore
-            CreateMessageReactionRequest, CreateMessageReactionRequestBody, Emoji,
+            CreateMessageReactionRequest,
+            CreateMessageReactionRequestBody,
+            Emoji,
         )
+
+        from bot.feishu_client import get_client
         client = get_client()
         req = (
             CreateMessageReactionRequest.builder()
@@ -35,8 +38,9 @@ def add_reaction(message_id: str, emoji_type: str = "EYES") -> Dict:
 
 def list_reactions(message_id: str) -> List[Dict]:
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.im.v1 import ListMessageReactionRequest  # type: ignore
+
+        from bot.feishu_client import get_client
         client = get_client()
         req = ListMessageReactionRequest.builder().message_id(message_id).build()
         resp = client.im.v1.message_reaction.list(req)

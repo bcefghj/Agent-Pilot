@@ -8,7 +8,7 @@ voice.transcribe / Pilot planner use.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from core.flow_memory.archival import write_archival_summary
 
@@ -22,10 +22,11 @@ def fetch_recent_minutes(open_id: str, *, limit: int = 5) -> List[Dict]:
     """
     out: List[Dict] = []
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.minutes.v1 import (  # type: ignore
-            ListMinuteRequest, GetMinuteTranscriptRequest,
+            ListMinuteRequest,
         )
+
+        from bot.feishu_client import get_client
         client = get_client()
         req = ListMinuteRequest.builder().user_id_type("open_id").page_size(limit).build()
         resp = client.minutes.v1.minute.list(req)

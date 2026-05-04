@@ -8,9 +8,9 @@ import pytest
 @pytest.fixture
 def fresh_runtime():
     """Reset both default_registry and default_loader to a fresh state."""
-    from core.runtime import tool_registry, skill_loader
-    from core.runtime.tool_registry import ToolRegistry
+    from core.runtime import skill_loader, tool_registry
     from core.runtime.skill_loader import SkillLoader
+    from core.runtime.tool_registry import ToolRegistry
 
     tool_registry._default = ToolRegistry()
     skill_loader._default = SkillLoader()

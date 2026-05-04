@@ -15,7 +15,7 @@ PRD §7.5 + ARCHITECTURE §1 §2 原则 5 的工程兑现：
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional
+from typing import Callable
 
 logger = logging.getLogger("pilot.application.memory_inject")
 

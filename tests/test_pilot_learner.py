@@ -1,8 +1,6 @@
 """P9 · PilotLearner 学习闭环测试."""
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from core.agent_pilot.application import (
@@ -14,7 +12,7 @@ from core.agent_pilot.application import (
 )
 from core.agent_pilot.application.learner import jaccard, tokenize
 from core.agent_pilot.application.task_service import TaskRepository
-from core.agent_pilot.domain import EventBus, TaskEvent
+from core.agent_pilot.domain import EventBus
 from core.agent_pilot.domain.events import EVT_TASK_DELIVERED, make_event
 
 
@@ -159,8 +157,8 @@ def test_event_bus_subscribe_attaches_to_delivery(tmp_path):
         event_bus=bus,
     )
     # 注入 default_task_service 以便 event 回调能找到 task
-    from core.agent_pilot.application.task_service import _default_service
     import core.agent_pilot.application.task_service as ts_mod
+    from core.agent_pilot.application.task_service import _default_service
     ts_mod._default_service = svc
 
     ctx = ContextService(upload_root=str(tmp_path))

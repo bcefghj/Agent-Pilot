@@ -103,8 +103,9 @@ def load_entries(open_id: str, *, since_ts: int = 0) -> List[GrowthEntry]:
 def _create_docx(title: str, body_md: str) -> Optional[str]:
     """Return the new docx token or None on failure. Mirrors v3 _create_doc."""
     try:
-        from bot.feishu_client import get_client
         import lark_oapi.api.docx.v1 as docx_api
+
+        from bot.feishu_client import get_client
 
         client = get_client()
         req = (
@@ -131,12 +132,16 @@ def _create_docx(title: str, body_md: str) -> Optional[str]:
 
 def _append_block(doc_token: str, content: str) -> bool:
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.docx.v1 import (
+            Block,
             CreateDocumentBlockChildrenRequest,
             CreateDocumentBlockChildrenRequestBody,
-            Block, Text, TextElement, TextRun,
+            Text,
+            TextElement,
+            TextRun,
         )
+
+        from bot.feishu_client import get_client
 
         client = get_client()
         text_run = TextRun.builder().content(content).build()
@@ -183,7 +188,7 @@ def ensure_growth_doc(open_id: str) -> str:
         "都会在这里追加一条记录。每周日 21:00 会自动生成一段成长摘要。\n\n"
         "---\n"
     )
-    token = _create_docx(f"LarkMentor · 我的新手成长记录", seed)
+    token = _create_docx("LarkMentor · 我的新手成长记录", seed)
     if token and user:
         user.growth_doc_token = token
         try:

@@ -1,10 +1,6 @@
 """P2 收官 · TaskService 应用服务测试."""
 from __future__ import annotations
 
-import os
-import shutil
-import tempfile
-
 import pytest
 
 from core.agent_pilot.application import TaskService
@@ -102,7 +98,7 @@ def test_owner_lock_blocks_fire_on_high_impact_event(svc):
 
 def test_stats_aggregates_by_state(svc):
     a = svc.create_task(intent="a", owner_open_id="u1")
-    b = svc.create_task(intent="b", owner_open_id="u1")
+    svc.create_task(intent="b", owner_open_id="u1")
     svc.fire(a.task_id, TaskEvent.USER_CONFIRM, actor_open_id="u1")
     s = svc.stats()
     assert s["total"] == 2
@@ -111,8 +107,8 @@ def test_stats_aggregates_by_state(svc):
 
 
 def test_repository_list_returns_recent_first(svc, tmp_path):
-    a = svc.create_task(intent="A", owner_open_id="u1")
-    b = svc.create_task(intent="B", owner_open_id="u1")
+    svc.create_task(intent="A", owner_open_id="u1")
+    svc.create_task(intent="B", owner_open_id="u1")
     rows = svc.repo.list()
     assert len(rows) == 2
     # mtime DESC: b first

@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
-import pytest
-
-
 # ── KeywordDenylist ─────────────────────────────────────────
 
 
@@ -141,7 +136,7 @@ def test_sandbox_external_channel():
 
 
 def test_sandbox_profile_setter():
-    from core.security.tool_sandbox import ToolSandbox, SandboxProfile
+    from core.security.tool_sandbox import SandboxProfile, ToolSandbox
     sb = ToolSandbox()
     sb.set_profile(SandboxProfile(
         tool="custom.tool",
@@ -161,7 +156,12 @@ def test_sandbox_module_helper_check():
 def test_8_layer_stack_can_import_all():
     """Smoke test: every layer of the 8-stack importable from core.security."""
     from core.security import (  # noqa: F401
-        PermissionManager, classify_transcript, HookSystem,
-        scrub_pii, audit,
-        KeywordDenylist, RateLimiter, ToolSandbox,
+        HookSystem,
+        KeywordDenylist,
+        PermissionManager,
+        RateLimiter,
+        ToolSandbox,
+        audit,
+        classify_transcript,
+        scrub_pii,
     )

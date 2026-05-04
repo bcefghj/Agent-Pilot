@@ -12,17 +12,20 @@
 from __future__ import annotations
 
 import logging
-import re
 import uuid
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, List, Optional
 
 from ..domain import (
     ContextPack,
-    Plan as DomainPlan,
-    PlanStep as DomainPlanStep,
     Task,
+)
+from ..domain import (
+    Plan as DomainPlan,
+)
+from ..domain import (
+    PlanStep as DomainPlanStep,
 )
 
 logger = logging.getLogger("pilot.application.planner_service")
@@ -97,7 +100,7 @@ def select_reasoning_pattern(task: Task, ctx: ContextPack,
 
     if total_context > 8 and any(k in text for k in _FANOUT_KEYWORDS):
         return PatternSelection(ReasoningPattern.TOT,
-                                reason=f"中等复杂度 + 并行语义，启用 Tree-of-Thoughts")
+                                reason="中等复杂度 + 并行语义，启用 Tree-of-Thoughts")
 
     return PatternSelection(default, reason="默认中等单轮 CoT")
 

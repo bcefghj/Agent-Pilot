@@ -1,10 +1,6 @@
 """P15 · 6-tier Memory 真正注入到 Pilot system prompt 的测试."""
 from __future__ import annotations
 
-import os
-
-import pytest
-
 from core.agent_pilot.application import (
     ContextBuildOptions,
     ContextService,

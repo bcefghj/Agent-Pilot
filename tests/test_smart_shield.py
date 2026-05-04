@@ -1,14 +1,14 @@
 """Tests for Smart Shield message classification."""
 
-import sys
 import os
+import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from memory.user_state import get_user, PendingMessage
-from core.smart_shield import _contains_urgent_keyword, classify_message
 from core.flow_detector import parse_command
+from core.smart_shield import _contains_urgent_keyword, classify_message
+from memory.user_state import PendingMessage, get_user
 
 
 class TestUrgentKeyword(unittest.TestCase):

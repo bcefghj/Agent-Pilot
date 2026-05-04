@@ -16,19 +16,18 @@
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .card_v2 import (
     _button,
     _collapsible,
-    _columns,
     _column,
+    _columns,
     _divider,
     _envelope,
     _header,
     _text,
 )
-
 
 # ── 1. PRD §5.4 任务识别卡 ──────────────────────────────────────────────────
 

@@ -35,7 +35,6 @@ sys.path.insert(0, str(ROOT))
 
 import lark_oapi as lark
 
-
 SHORT_SCRIPT = [
     ("hello", "你好 LarkMentor，先做个自我介绍吧"),
     ("urgent", "线上紧急故障！订单服务挂了，立即处理"),
@@ -83,8 +82,10 @@ def _build_test_client():
 
 def _send_text(client, target_user_id: str, text: str, chat_id: str = None) -> bool:
     import json as _json
+
     from lark_oapi.api.im.v1 import (
-        CreateMessageRequest, CreateMessageRequestBody,
+        CreateMessageRequest,
+        CreateMessageRequestBody,
     )
     if chat_id:
         receive_id = chat_id
@@ -138,7 +139,7 @@ def run(scenario_name: str = "standard", pause_sec: int = None):
 
     print("-" * 70)
     print(f"Sent {success}/{len(script)} messages successfully.")
-    print(f"Now check the LarkMentor target account for cards/auto-replies.")
+    print("Now check the LarkMentor target account for cards/auto-replies.")
     sys.exit(0 if success == len(script) else 1)
 
 

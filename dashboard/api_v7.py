@@ -211,7 +211,7 @@ def install_v7_routes(app, *, static_dir: Optional[Path] = None) -> None:
     auto-generated below if they don't exist (so this module is fully
     self-contained for tests).
     """
-    from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
     static_dir = static_dir or Path(__file__).parent / "static_v7"
     static_dir.mkdir(parents=True, exist_ok=True)

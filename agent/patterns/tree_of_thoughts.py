@@ -35,7 +35,7 @@ def tree_of_thoughts(
             + "\n---\n".join(f"[{i}] {l['text'][:300]}" for i, l in enumerate(next_leaves))
         )
         scores_out = llm(eval_prompt)
-        import re, json
+        import re
         try:
             nums = [float(m.group(0)) for m in re.finditer(r"\d+(?:\.\d+)?", scores_out)]
             for i, l in enumerate(next_leaves):

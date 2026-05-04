@@ -7,8 +7,6 @@ system prompt contains the injected memory.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 

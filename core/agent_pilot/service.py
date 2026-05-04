@@ -80,7 +80,7 @@ def launch(intent: str, *, user_open_id: str = "", meta: Optional[Dict[str, Any]
     except Exception as _e_rl:
         logger.debug("rate limiter skipped: %s", _e_rl)
     try:
-        from core.observability import incr, audit
+        from core.observability import audit, incr
         incr("plan_started", source=(meta or {}).get("source", "unknown"))
         audit("plan.launch", user=user_open_id, intent=intent[:120],
               source=(meta or {}).get("source", ""))

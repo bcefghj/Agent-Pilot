@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Dict, List
 
-from utils.time_utils import now_ts, fmt_time
+from utils.time_utils import fmt_time
 
 
 @dataclass

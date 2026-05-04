@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import pytest
 
+from core.agent_pilot.orchestrator import PilotOrchestrator
 from core.agent_pilot.planner import (
-    PilotPlanner, Plan, PlanStep, KNOWN_TOOLS, plan_from_intent,
+    KNOWN_TOOLS,
+    PilotPlanner,
+    Plan,
+    PlanStep,
+    plan_from_intent,
 )
-from core.agent_pilot.orchestrator import PilotOrchestrator, ExecutionEvent
-from core.agent_pilot.tools import build_default_registry
 from core.agent_pilot.scenarios import ScenarioRegistry
-
+from core.agent_pilot.tools import build_default_registry
 
 # ─────────────────────────── Planner ────────────────────────────
 

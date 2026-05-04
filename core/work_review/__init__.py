@@ -15,5 +15,5 @@ Stages
    archival store.
 """
 
-from .weekly_report import generate_weekly_report  # noqa: F401
 from .monthly_wrapped import generate_monthly_wrapped  # noqa: F401
+from .weekly_report import generate_weekly_report  # noqa: F401

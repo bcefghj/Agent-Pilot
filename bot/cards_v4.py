@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from typing import Any, Dict, List, Optional
 
 from .card_v2 import (
-    pilot_progress_card, pilot_patch_progress,
-    skills_list_card, context_card, clarify_card,
-    _header, _text, _button, _divider, _collapsible, _envelope,
+    _collapsible,
+    _divider,
+    _envelope,
+    _header,
+    _text,
 )
 
 logger = logging.getLogger("bot.cards_v4")
@@ -102,7 +103,7 @@ def citation_report_card(report: Dict[str, Any]) -> Dict[str, Any]:
     body.append(_divider())
     body.append(_text(f"**References:**\n{report.get('references_md', '')[:800]}", eid="ct.refs"))
     template = "green" if ratio >= 0.8 else ("yellow" if ratio >= 0.5 else "red")
-    header = _header("Citation Report", subtitle=f"由独立 @citation-agent 验证", template=template)
+    header = _header("Citation Report", subtitle="由独立 @citation-agent 验证", template=template)
     return _envelope(header, body)
 
 
@@ -212,7 +213,6 @@ def human_approval_card(
 def stream_update(message_id: str, element_id: str, new_content: str) -> bool:
     """通过 cardkit.v1.cardElement.content 发送增量更新（打字机效果）。"""
     try:
-        import requests
         # Using PATCH on im.v1.message via lark-oapi is safer, but cardkit streaming
         # uses a special endpoint. Fallback to patch_card if not available.
         from bot.message_sender import patch_card as _patch

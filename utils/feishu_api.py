@@ -1,16 +1,13 @@
 """Feishu Open API helper functions for calendar, tasks, contacts, and bitable."""
 
-import json
 import logging
 import time
 
-import lark_oapi as lark
-from lark_oapi.api.contact.v3 import GetUserRequest
 from lark_oapi.api.bitable.v1 import (
-    CreateAppTableRecordRequest,
-    CreateAppTableRecordRequestBody,
     AppTableRecord,
+    CreateAppTableRecordRequest,
 )
+from lark_oapi.api.contact.v3 import GetUserRequest
 
 from bot.feishu_client import get_client
 from config import Config

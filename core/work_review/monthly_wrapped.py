@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import Counter
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict
 
 from core.flow_memory.archival import query_archival
 from core.flow_memory.working import WorkingMemory

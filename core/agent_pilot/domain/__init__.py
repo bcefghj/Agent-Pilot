@@ -22,27 +22,27 @@ PRD §6 §7 §10 的工程兑现：
 - ``....bot.cards`` 渲染卡片
 - ``.....dashboard`` 渲染任务列表/详情
 """
-from .task import Task
-from .state_machine import TaskState, TaskEvent, transition, can_transition
-from .plan import Plan, PlanStep
 from .artifact import Artifact, ArtifactKind
 from .context_pack import (
+    Constraints,
     ContextPack,
     MaterialKind,
-    SourceMessage,
-    SourceDoc,
-    UserMaterial,
     OutputRequirements,
-    Constraints,
+    SourceDoc,
+    SourceMessage,
+    UserMaterial,
 )
-from .owner import OwnerAssignment, OwnerLock
-from .events import DomainEvent, EventBus, default_event_bus
 from .errors import (
+    ContextNotReadyError,
     DomainError,
     InvalidTransitionError,
     OwnerLockedError,
-    ContextNotReadyError,
 )
+from .events import DomainEvent, EventBus, default_event_bus
+from .owner import OwnerAssignment, OwnerLock
+from .plan import Plan, PlanStep
+from .state_machine import TaskEvent, TaskState, can_transition, transition
+from .task import Task
 
 __all__ = [
     "Task",

@@ -24,8 +24,9 @@ def create_doc(title: str = "", markdown: str = "", folder_token: str = "") -> D
     except Exception as e:
         # Fallback: just write to local artifacts
         logger.warning("doc.create fallback to local: %s", e)
+        import time
+        import uuid
         from pathlib import Path
-        import uuid, time
         artifacts = Path.cwd() / "data" / "pilot_artifacts" / f"doc-{int(time.time())}-{uuid.uuid4().hex[:6]}.md"
         artifacts.parent.mkdir(parents=True, exist_ok=True)
         artifacts.write_text(f"# {title}\n\n{markdown}", encoding="utf-8")

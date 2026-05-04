@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
-from typing import Any, Dict
 
 
 def cmd_chat(args) -> None:
@@ -40,12 +38,15 @@ def cmd_chat(args) -> None:
 def cmd_status(args) -> None:
     """Show system status."""
     from agent import (
-        default_context_manager, default_memory, default_permission_gate,
-        default_skills_loader, default_mcp_manager,
+        default_context_manager,
+        default_mcp_manager,
+        default_memory,
+        default_permission_gate,
+        default_skills_loader,
     )
-    from agent.tools import get_registry
-    from agent.providers import default_providers
     from agent.named_agents import default_named_agents
+    from agent.providers import default_providers
+    from agent.tools import get_registry
     status = {
         "providers": default_providers().snapshot(),
         "memory": default_memory().snapshot(),

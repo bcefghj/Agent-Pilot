@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .registry import tool
 
@@ -54,7 +54,9 @@ def add_node(
 def render_mermaid(dsl: str = "", output_path: str = "") -> Dict[str, Any]:
     """输出 PNG 路径，可用于 doc.insert_image."""
     try:
-        import subprocess, tempfile, time
+        import subprocess
+        import tempfile
+        import time
         out_path = output_path or str(Path("data/artifacts") / f"mermaid-{int(time.time())}.png")
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(suffix=".mmd", mode="w", delete=False, encoding="utf-8") as f:

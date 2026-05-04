@@ -90,8 +90,9 @@ def _try_create_feishu_doc(title: str) -> Dict[str, Any]:
         from config import Config
         if not (Config.FEISHU_APP_ID and Config.FEISHU_APP_SECRET):
             return {}
-        from bot.feishu_client import get_client
         import lark_oapi.api.docx.v1 as docx_api
+
+        from bot.feishu_client import get_client
         client = get_client()
         req = (
             docx_api.CreateDocumentRequest.builder()
@@ -124,12 +125,12 @@ def _try_append_feishu_blocks(doc_token: str, markdown: str) -> int:
     This is enough for the demo; full markdown parsing is out of scope.
     """
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.docx.v1 import (
             CreateDocumentBlockChildrenRequest,
             CreateDocumentBlockChildrenRequestBody,
-            Block,
         )
+
+        from bot.feishu_client import get_client
         client = get_client()
         blocks = _markdown_to_blocks(markdown)
         if not blocks:

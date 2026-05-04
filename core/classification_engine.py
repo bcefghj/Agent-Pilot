@@ -26,11 +26,11 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from typing import Dict, Optional
 
 from config import Config
-from core.sender_profile import SenderProfile, get_profile
+from core.sender_profile import SenderProfile
 from memory.user_state import UserState
 
 logger = logging.getLogger("flowguard.classifier")

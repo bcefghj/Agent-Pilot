@@ -4,14 +4,12 @@ context build -> planning -> orchestration -> delivery.
 Tests the complete pilot flow without real Feishu APIs (all tools use local fallback).
 """
 
-import pytest
 import time
-from unittest.mock import MagicMock, patch
 
 
 def test_full_pilot_flow_explicit_command():
     """Test /pilot explicit command flow end-to-end."""
-    from bot.pilot_router import PilotRouter, RouterResult
+    from bot.pilot_router import PilotRouter
 
     sent_cards = []
     def mock_sender(target, card, *, scope="user"):
@@ -164,9 +162,9 @@ def test_task_ignore_flow():
 def test_orchestrator_with_default_tools():
     """Test OrchestratorService runs with default tool registry."""
     from core.agent_pilot.application.orchestrator_service import OrchestratorService
-    from core.agent_pilot.tools import build_default_registry
-    from core.agent_pilot.domain import Task, TaskState, TaskEvent
+    from core.agent_pilot.domain import Task, TaskEvent
     from core.agent_pilot.domain.context_pack import ContextPack, OutputRequirements
+    from core.agent_pilot.tools import build_default_registry
 
     tools = build_default_registry()
     orch = OrchestratorService(tools=tools)
@@ -260,7 +258,7 @@ def test_state_machine_full_lifecycle():
 
 def test_context_service_build():
     """Test ContextService builds valid ContextPack."""
-    from core.agent_pilot.application import ContextService, ContextBuildOptions
+    from core.agent_pilot.application import ContextBuildOptions, ContextService
     from core.agent_pilot.domain import SourceMessage
 
     svc = ContextService()
@@ -282,7 +280,7 @@ def test_context_service_build():
 
 def test_intent_detector_three_gates():
     """Test IntentDetector three-gate mechanism."""
-    from core.agent_pilot.application import IntentDetector, ChatMessage, IntentVerdict
+    from core.agent_pilot.application import ChatMessage, IntentDetector, IntentVerdict
 
     detector = IntentDetector()
     msgs = [

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 def test_tool_registry_register_and_invoke():
-    from core.runtime import ToolRegistry, ToolMetadata
+    from core.runtime import ToolMetadata, ToolRegistry
 
     reg = ToolRegistry()
 
@@ -39,7 +37,7 @@ def test_tool_registry_unknown_tool():
 
 
 def test_tool_registry_args_mismatch():
-    from core.runtime import ToolRegistry, ToolMetadata
+    from core.runtime import ToolMetadata, ToolRegistry
 
     reg = ToolRegistry()
 
@@ -57,7 +55,7 @@ def test_tool_registry_args_mismatch():
 
 
 def test_tool_registry_rate_limit():
-    from core.runtime import ToolRegistry, ToolMetadata
+    from core.runtime import ToolMetadata, ToolRegistry
 
     reg = ToolRegistry()
     reg.register(ToolMetadata(
@@ -76,7 +74,7 @@ def test_tool_registry_rate_limit():
 
 
 def test_tool_registry_stats():
-    from core.runtime import ToolRegistry, ToolMetadata
+    from core.runtime import ToolMetadata, ToolRegistry
 
     reg = ToolRegistry()
     reg.register(ToolMetadata(name="a", description="", handler=lambda: {}, skill="s1"))
@@ -155,8 +153,10 @@ def test_hook_runtime_facade_smoke():
 
 def test_default_singletons():
     from core.runtime import (
-        default_registry, default_loader,
-        default_facade, default_hook_runtime,
+        default_facade,
+        default_hook_runtime,
+        default_loader,
+        default_registry,
     )
 
     assert default_registry() is default_registry()

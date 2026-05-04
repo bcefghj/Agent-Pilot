@@ -22,7 +22,7 @@ import enum
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 logger = logging.getLogger("flowguard.security.classifier")
 

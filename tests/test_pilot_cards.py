@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from bot.cards_pilot import (
     assign_picker_card,
     context_confirm_card,
@@ -14,7 +12,6 @@ from bot.cards_pilot import (
     task_progress_card,
     task_suggested_card,
 )
-
 
 # ── helper: validate v2 schema 基础结构 ──────────────────────────────────────
 

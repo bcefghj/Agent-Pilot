@@ -25,7 +25,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-
 _DEFAULT_DATA_DIR = os.path.join("data", "events")
 _FLUSH_INTERVAL = 0.1  # 100ms
 _FLUSH_BATCH_SIZE = 10

@@ -6,9 +6,8 @@ Startup fails fast with clear error messages if required fields are missing.
 
 from __future__ import annotations
 
-import os
-import sys
 import logging
+import os
 from typing import List
 
 from dotenv import load_dotenv

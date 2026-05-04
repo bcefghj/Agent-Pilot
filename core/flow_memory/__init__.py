@@ -18,7 +18,7 @@ Plus the ``flow_memory_md`` module that resolves a six-level
 User / Session) at request time.
 """
 
-from .working import WorkingMemory, WorkingEvent  # noqa: F401
-from .compaction import compact_session, CompactionResult  # noqa: F401
-from .archival import write_archival_summary, query_archival  # noqa: F401
+from .archival import query_archival, write_archival_summary  # noqa: F401
+from .compaction import CompactionResult, compact_session  # noqa: F401
 from .flow_memory_md import resolve_memory_md  # noqa: F401
+from .working import WorkingEvent, WorkingMemory  # noqa: F401

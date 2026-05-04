@@ -19,7 +19,7 @@ import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger("agent.teams")
 
@@ -185,7 +185,7 @@ def architect_debate(topic: str, *, team_id: str = "", providers=None) -> Dict[s
         others = [m["content"][:400] for m in messages if m["from_agent"] != role]
         prompt = (
             f"你是 {role}。其他两个观点：\n\n" + "\n---\n".join(others) +
-            f"\n\n对这些观点做出批判（200 字以内）："
+            "\n\n对这些观点做出批判（200 字以内）："
         )
         task_kind = {"pilot": "reasoning", "debater": "chinese_chat", "researcher": "long_context"}[role]
         text = providers.chat([{"role": "user", "content": prompt}], task_kind=task_kind, max_tokens=400)
@@ -196,7 +196,7 @@ def architect_debate(topic: str, *, team_id: str = "", providers=None) -> Dict[s
     summary_prompt = (
         f"话题：{topic}\n\n"
         f"3 轮辩论的所有观点：\n" + "\n---\n".join(m["content"][:300] for m in team.recent_messages(20)) +
-        f"\n\n请综合所有观点，给出最终决策建议（含关键依据和取舍）。"
+        "\n\n请综合所有观点，给出最终决策建议（含关键依据和取舍）。"
     )
     final = providers.chat([{"role": "user", "content": summary_prompt}], task_kind="reasoning", max_tokens=1200)
     team.send(TeamMessage(team_id=team_id, from_agent="orchestrator", to_agent="*", kind="decision", content=final))

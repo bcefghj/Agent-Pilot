@@ -5,13 +5,12 @@ Provides production-grade fault tolerance patterns used across the project.
 
 from __future__ import annotations
 
-import asyncio
 import functools
 import logging
 import random
-import time
 import threading
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass
 from typing import Any, Callable, Optional, TypeVar
 
 logger = logging.getLogger("pilot.resilience")

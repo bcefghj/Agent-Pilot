@@ -48,7 +48,7 @@ class ApprovalManager:
         if not self.approvals_path.exists():
             return
         try:
-            data = json.loads(self.approvals_path.read_text())
+            json.loads(self.approvals_path.read_text())
             # `data` is {tool_name: True/False} for always_allow persisted
         except Exception as e:
             logger.debug("approvals load failed: %s", e)

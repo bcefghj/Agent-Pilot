@@ -22,13 +22,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional
-
-import lark_oapi as lark
+from dataclasses import asdict, dataclass
+from typing import Dict, Optional
 
 from bot.feishu_client import get_client
-from utils.time_utils import now_ts, fmt_time
+from utils.time_utils import fmt_time, now_ts
 
 logger = logging.getLogger("flowguard.workspace")
 
@@ -124,9 +122,12 @@ def _create_bitable(user_open_id: str) -> Optional[Dict]:
     """Create a Bitable app + table for this user."""
     try:
         from lark_oapi.api.bitable.v1 import (
-            CreateAppRequest, ReqApp,
-            CreateAppTableRequest, CreateAppTableRequestBody, ReqTable,
             AppTableCreateHeader,
+            CreateAppRequest,
+            CreateAppTableRequest,
+            CreateAppTableRequestBody,
+            ReqApp,
+            ReqTable,
         )
         client = get_client()
 
@@ -189,8 +190,9 @@ def _seed_demo_rows(app_token: str, table_id: str) -> int:
     """Pre-seed demo rows so the dashboard looks alive."""
     try:
         from lark_oapi.api.bitable.v1 import (
-            BatchCreateAppTableRecordRequest, BatchCreateAppTableRecordRequestBody,
             AppTableRecord,
+            BatchCreateAppTableRecordRequest,
+            BatchCreateAppTableRecordRequestBody,
         )
         client = get_client()
         records = [
@@ -281,9 +283,12 @@ def _create_doc(title: str, body_md: str) -> Optional[Dict]:
         # Try to write the body markdown as a single text block
         try:
             from lark_oapi.api.docx.v1 import (
+                Block,
                 CreateDocumentBlockChildrenRequest,
                 CreateDocumentBlockChildrenRequestBody,
-                Block, Text, TextElement, TextRun,
+                Text,
+                TextElement,
+                TextRun,
             )
             text_run = TextRun.builder().content(body_md).build()
             text_el = TextElement.builder().text_run(text_run).build()
@@ -357,9 +362,12 @@ def append_recovery_card(user_open_id: str, content_md: str) -> bool:
         return False
     try:
         from lark_oapi.api.docx.v1 import (
+            Block,
             CreateDocumentBlockChildrenRequest,
             CreateDocumentBlockChildrenRequestBody,
-            Block, Text, TextElement, TextRun,
+            Text,
+            TextElement,
+            TextRun,
         )
         client = get_client()
         text_run = TextRun.builder().content(

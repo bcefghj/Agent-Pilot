@@ -43,13 +43,13 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from ..planner import Plan, PlanStep
-from .tool_registry import ToolRegistry, default_registry
-from .hooks import HookRegistry, HookEvent, default_hook_registry
-from .permissions import PermissionGate, default_permission_gate, PermissionMode, Decision
 from .context_manager import ContextManager
+from .hooks import HookEvent, HookRegistry, default_hook_registry
 from .memory import MemoryLayer, default_memory
+from .permissions import PermissionGate, default_permission_gate
 from .skills_loader import SkillsLoader, default_skills
-from .streaming_executor import StreamingToolExecutor, ToolInvocation, ToolOutcome
+from .streaming_executor import StreamingToolExecutor, ToolInvocation
+from .tool_registry import ToolRegistry, default_registry
 
 logger = logging.getLogger("pilot.harness.orchestrator_v2")
 
@@ -394,7 +394,7 @@ class ConversationOrchestrator:
 
     def _finish(self, state: OrchestratorState, ctx: Dict[str, Any]) -> None:
         plan = state.plan
-        stop_payload = self._hooks.fire(HookEvent.STOP, {
+        self._hooks.fire(HookEvent.STOP, {
             "plan_id": plan.plan_id, "verdict": state.verdict,
             "user_open_id": plan.user_open_id,
         })

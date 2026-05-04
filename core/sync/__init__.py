@@ -16,10 +16,10 @@ first demo week.
 
 from .crdt_hub import (
     CrdtHub,
-    default_hub,
-    broadcast_state,
-    broadcast_event,
     attach_orchestrator,
+    broadcast_event,
+    broadcast_state,
+    default_hub,
 )
 
 __all__ = [

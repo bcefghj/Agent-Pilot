@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import pytest
 
+from core.security.audit_log import audit, query_audit
+from core.security.hook_system import HookEvent, HookSystem, HookVeto
+from core.security.permission_manager import (
+    PermissionLevel,
+    PermissionManager,
+)
 from core.security.pii_scrubber import has_pii, scrub_pii
 from core.security.transcript_classifier import (
-    Action, classify_transcript, redact,
+    Action,
+    classify_transcript,
+    redact,
 )
-from core.security.permission_manager import (
-    PermissionLevel, PermissionManager, default_manager,
-)
-from core.security.hook_system import HookEvent, HookSystem, HookVeto
-from core.security.audit_log import audit, query_audit
-
 
 # ── PII ─────────────────────────────────────────────────────────────
 

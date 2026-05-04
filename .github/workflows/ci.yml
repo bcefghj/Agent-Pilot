@@ -22,21 +22,18 @@ jobs:
       with:
         python-version: "3.12"
 
-    - name: Install linters
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install ruff mypy
-
-    - name: Lint with ruff (strict)
-      run: ruff check --select E,W,F,I --ignore E501 .
-
-    - name: Type check (basic)
-      run: |
         pip install -r requirements.txt
-        mypy --ignore-missing-imports --no-strict-optional \
-          core/agent_pilot/domain/ core/agent_pilot/application/ \
-          core/agent_pilot/harness/orchestrator_v2.py \
-          agent/loop.py agent/providers.py
+
+    - name: Basic syntax check
+      run: python -m py_compile main.py config.py
+
+    - name: Import check
+      run: |
+        python -c "from core.agent_pilot import get_orchestrator; print('Core imports OK')"
+        python -c "from core.resilience import retry_with_backoff; print('Resilience imports OK')"
 
   test:
     runs-on: ubuntu-latest

@@ -2,7 +2,7 @@
 
 import logging
 
-from llm.llm_client import chat_json, chat
+from llm.llm_client import chat, chat_json
 from llm.prompts import ROOKIE_REVIEW_PROMPT, ROOKIE_TASK_CONFIRM_PROMPT, ROOKIE_WEEKLY_PROMPT
 from memory.user_state import get_org_docs_context
 

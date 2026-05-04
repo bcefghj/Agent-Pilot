@@ -20,15 +20,17 @@ from typing import Any, Dict, List, Optional
 
 from .artifact import Artifact
 from .context_pack import ContextPack
-from .errors import InvalidTransitionError, OwnerLockedError
-from .events import DomainEvent, EventBus, default_event_bus, make_event
+from .errors import OwnerLockedError
 from .events import (
-    EVT_TASK_CREATED,
-    EVT_TASK_STATE_CHANGED,
-    EVT_TASK_ASSIGNED,
-    EVT_TASK_OWNER_LOCKED,
-    EVT_CONTEXT_CONFIRMED,
     EVT_ARTIFACT_CREATED,
+    EVT_CONTEXT_CONFIRMED,
+    EVT_TASK_ASSIGNED,
+    EVT_TASK_CREATED,
+    EVT_TASK_OWNER_LOCKED,
+    EVT_TASK_STATE_CHANGED,
+    EventBus,
+    default_event_bus,
+    make_event,
 )
 from .owner import OwnerAssignment, OwnerLock
 from .plan import Plan

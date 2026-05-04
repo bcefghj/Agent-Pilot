@@ -20,8 +20,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, asdict, field
-from typing import Dict, List, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Dict, List
 
 from utils.time_utils import now_ts
 

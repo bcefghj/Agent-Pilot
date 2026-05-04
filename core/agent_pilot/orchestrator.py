@@ -21,13 +21,12 @@ Execution contract
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from .planner import Plan, PlanStep

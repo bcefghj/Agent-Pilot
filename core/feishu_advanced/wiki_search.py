@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Dict
+from typing import Dict, List
 
 logger = logging.getLogger("flowguard.feishu.wiki")
 
@@ -11,8 +11,9 @@ logger = logging.getLogger("flowguard.feishu.wiki")
 def search_wiki(query: str, *, limit: int = 5) -> List[Dict]:
     """Returns matching wiki nodes (best-effort)."""
     try:
-        from bot.feishu_client import get_client
         from lark_oapi.api.wiki.v2 import SearchWikiNodeRequest, SearchWikiNodeRequestBody  # type: ignore
+
+        from bot.feishu_client import get_client
         client = get_client()
         req = (
             SearchWikiNodeRequest.builder()

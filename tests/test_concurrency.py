@@ -6,11 +6,8 @@
 from __future__ import annotations
 
 import json
-import os
 import threading
 import time
-
-import pytest
 
 
 def test_atomic_write_writes_and_replaces(tmp_path):

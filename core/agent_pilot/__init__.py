@@ -22,10 +22,10 @@ Key modules:
     tools/        – Callable tools that the planner can route to.
 """
 
+from .orchestrator import ExecutionEvent, PilotOrchestrator
 from .planner import PilotPlanner, Plan, PlanStep
-from .orchestrator import PilotOrchestrator, ExecutionEvent
-from .scenarios import ScenarioRegistry, Scenario
-from .service import get_orchestrator, launch, get_plan, list_plans
+from .scenarios import Scenario, ScenarioRegistry
+from .service import get_orchestrator, get_plan, launch, list_plans
 
 __all__ = [
     "PilotPlanner",

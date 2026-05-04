@@ -16,31 +16,26 @@ from core.agent_pilot.domain import (
     Artifact,
     ArtifactKind,
     ContextPack,
-    DomainEvent,
     EventBus,
     InvalidTransitionError,
-    MaterialKind,
     OwnerLockedError,
     SourceMessage,
     Task,
     TaskEvent,
     TaskState,
-    UserMaterial,
     can_transition,
     transition,
 )
 from core.agent_pilot.domain.context_pack import (
-    Constraints,
     OutputRequirements,
 )
 from core.agent_pilot.domain.events import (
+    EVT_TASK_ASSIGNED,
     EVT_TASK_CREATED,
     EVT_TASK_STATE_CHANGED,
-    EVT_TASK_ASSIGNED,
     make_event,
 )
 from core.agent_pilot.domain.state_machine import legal_events, transition_count
-
 
 # ── 枚举完整性 ─────────────────────────────────────────────────────────────
 

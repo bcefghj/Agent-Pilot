@@ -4,8 +4,8 @@ import json
 import logging
 import threading
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 import lark_oapi as lark
 

@@ -1,10 +1,9 @@
 """Module 2: Flow Detector – work state recognition and focus mode management."""
 
-import re
 import logging
+import re
 
-from memory.user_state import UserState, get_user
-from config import Config
+from memory.user_state import UserState
 
 logger = logging.getLogger("flowguard.detector")
 
@@ -261,7 +260,7 @@ def parse_command(text: str) -> dict:
 
 def get_status_text(user: UserState) -> str:
     if user.is_focusing():
-        from utils.time_utils import now_ts, fmt_duration
+        from utils.time_utils import fmt_duration, now_ts
         elapsed = now_ts() - user.focus_start_ts
         pending_count = len(user.pending_messages)
         task_info = f"\n当前任务：{user.active_task_name}" if user.active_task_name else ""

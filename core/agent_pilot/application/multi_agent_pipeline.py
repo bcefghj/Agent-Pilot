@@ -37,7 +37,6 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ..domain import (
     Artifact,
-    ArtifactKind,
     EventBus,
     Task,
     default_event_bus,

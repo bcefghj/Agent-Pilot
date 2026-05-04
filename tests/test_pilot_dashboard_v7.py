@@ -1,10 +1,7 @@
 """P10 · Dashboard v7 三视角 API 测试 (FastAPI TestClient)."""
 from __future__ import annotations
 
-import os
-
 import pytest
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

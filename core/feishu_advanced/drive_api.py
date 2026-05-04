@@ -32,8 +32,9 @@ def upload_all(local_path: str, *, parent_type: str = "explorer",
     mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
 
     try:
-        from bot.feishu_client import get_tenant_access_token
         import requests
+
+        from bot.feishu_client import get_tenant_access_token
     except Exception as e:
         logger.warning("drive.upload_all deps missing: %s", e)
         return None

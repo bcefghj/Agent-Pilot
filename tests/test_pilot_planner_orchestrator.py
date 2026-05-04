@@ -7,22 +7,16 @@ from core.agent_pilot.application import (
     ContextBuildOptions,
     ContextService,
     OrchestratorService,
-    PatternSelection,
     PlannerService,
     ReasoningPattern,
     TaskService,
     select_reasoning_pattern,
 )
-from core.agent_pilot.application.orchestrator_service import OrchestratorConfig
 from core.agent_pilot.application.task_service import TaskRepository
 from core.agent_pilot.domain import (
-    Plan as DomainPlan,
-    PlanStep as DomainPlanStep,
-    Task,
     TaskEvent,
     TaskState,
 )
-
 
 # ── 5 推理模式选择 ────────────────────────────────────────────────────────
 

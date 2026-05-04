@@ -13,7 +13,7 @@ Feishu 开发者平台配置：
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger("feishu_advanced.bitable_ai_node_v4")
 

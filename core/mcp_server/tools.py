@@ -58,8 +58,8 @@ def tool_classify_message(
               meta={"reason": decision.reason})
         return {"error": "permission_denied", "reason": decision.reason}
     try:
-        from memory.user_state import get_user
         from core.smart_shield import process_message  # type: ignore
+        from memory.user_state import get_user
         user = get_user(user_open_id)
         if not user:
             return {"error": "user_not_found"}
@@ -336,9 +336,9 @@ def tool_classify_readonly(
     if not decision.allowed:
         return {"error": "permission_denied", "reason": decision.reason}
     try:
-        from memory.user_state import get_user
         from core.classification_engine import classify
         from core.sender_profile import SenderProfile
+        from memory.user_state import get_user
 
         user = get_user(user_open_id)
         if user is None:
@@ -379,8 +379,8 @@ def tool_skill_invoke(
         return {"error": "missing_skill_name"}
     args = args or {}
     try:
-        from core.runtime import default_registry
         from core.mentor.skills_init import register_all
+        from core.runtime import default_registry
         register_all()
         return default_registry().invoke(
             skill_name, args, user_open_id=user_open_id,
@@ -436,8 +436,8 @@ def tool_memory_resolve(
 def tool_list_skills() -> Dict[str, Any]:
     """List all registered Skills (manifest summary)."""
     try:
-        from core.runtime import default_loader
         from core.mentor.skills_init import register_all
+        from core.runtime import default_loader
         register_all()
         skills = default_loader().list_skills()
         return {
@@ -555,7 +555,8 @@ def tool_pilot_run_plan(
     executing any steps.
     """
     try:
-        from core.agent_pilot.service import launch as _launch, execute_plan
+        from core.agent_pilot.service import execute_plan
+        from core.agent_pilot.service import launch as _launch
         plan = _launch(intent, user_open_id=user_open_id, async_run=False)
         if execute:
             execute_plan(plan.plan_id)
@@ -654,8 +655,8 @@ def tool_pilot_task_timeline(task_id: str) -> Dict[str, Any]:
 def tool_pilot_skill_list() -> Dict[str, Any]:
     """List all available skills (official + auto-generated)."""
     try:
-        from core.runtime import default_loader
         from core.mentor.skills_init import register_all
+        from core.runtime import default_loader
         register_all()
         skills = default_loader().list_skills()
         return {

@@ -1,7 +1,5 @@
 """Tests for config.py — Pydantic validation and defaults."""
 
-import os
-import pytest
 
 
 class TestConfigDefaults:

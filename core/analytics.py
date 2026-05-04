@@ -2,12 +2,12 @@
 
 import logging
 
-from memory.user_state import UserState, all_users
-from bot.message_sender import send_card
 from bot.card_builder import daily_report_card
-from utils.time_utils import fmt_duration
+from bot.message_sender import send_card
 from llm.llm_client import chat
 from llm.prompts import DAILY_ADVICE_PROMPT
+from memory.user_state import UserState, all_users
+from utils.time_utils import fmt_duration
 
 logger = logging.getLogger("flowguard.analytics")
 

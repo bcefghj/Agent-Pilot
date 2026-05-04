@@ -13,12 +13,9 @@ wire format (varint encoded):
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-import struct
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 logger = logging.getLogger("sync_v4.yws")
 

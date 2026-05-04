@@ -1,13 +1,12 @@
 """Tests for core/resilience.py — retry, circuit breaker, timeout."""
 
-import threading
 import time
 
 import pytest
 
 
 def test_retry_with_backoff_succeeds_after_retries():
-    from core.resilience import retry_with_backoff, RetryConfig
+    from core.resilience import RetryConfig, retry_with_backoff
 
     call_count = [0]
 
@@ -23,7 +22,7 @@ def test_retry_with_backoff_succeeds_after_retries():
 
 
 def test_retry_with_backoff_raises_after_max_attempts():
-    from core.resilience import retry_with_backoff, RetryConfig
+    from core.resilience import RetryConfig, retry_with_backoff
 
     @retry_with_backoff(RetryConfig(max_attempts=2, base_delay_sec=0.01))
     def always_fails():
@@ -58,7 +57,7 @@ def test_run_with_timeout_succeeds():
 
 
 def test_run_with_timeout_raises_on_slow_fn():
-    from core.resilience import run_with_timeout, TimeoutError
+    from core.resilience import TimeoutError, run_with_timeout
 
     def slow():
         time.sleep(5)
