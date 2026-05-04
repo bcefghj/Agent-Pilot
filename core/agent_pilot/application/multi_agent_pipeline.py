@@ -283,6 +283,97 @@ class MultiAgentPipeline:
         report.transcripts.append(ts)
         task.log(agent="@mentor", kind="result", content=ts.summary[:200])
 
+    # ── Coordinator mode ─────────────────────────────────────────────────
+    def run_coordinator(self, task: Task, *, max_parallel: int = 3) -> List[AgentTranscript]:
+        """Coordinator mode: a planning-only coordinator dispatches work to specialist agents.
+
+        Inspired by Claude Code's coordinator pattern where the coordinator
+        only plans and delegates, never executes tools directly.
+        """
+        coordinator_prompt = (
+            f"你是 Agent-Pilot 的协调者。任务：{task.intent}\n\n"
+            f"你需要将任务分配给以下专家 Agent：\n"
+            f"- @researcher: 调研和信息收集\n"
+            f"- @writer: 文档撰写\n"
+            f"- @reviewer: 质量审查\n\n"
+            f"请输出 JSON 格式的任务分配：\n"
+            f'[{{"agent": "...", "task": "...", "priority": 1}}]\n'
+            f"直接输出 JSON，不要解释。"
+        )
+
+        try:
+            assignments = self._call_llm(coordinator_prompt)
+            import json
+            tasks = json.loads(assignments.strip() if assignments else "[]")
+        except Exception:
+            tasks = [
+                {"agent": "@researcher", "task": "收集上下文信息", "priority": 1},
+                {"agent": "@writer", "task": "撰写文档内容", "priority": 2},
+                {"agent": "@reviewer", "task": "审查输出质量", "priority": 3},
+            ]
+
+        transcripts: List[AgentTranscript] = []
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        priority_groups: Dict[int, list] = {}
+        for t in tasks:
+            p = t.get("priority", 1)
+            priority_groups.setdefault(p, []).append(t)
+
+        for priority in sorted(priority_groups.keys()):
+            group = priority_groups[priority]
+            if len(group) == 1:
+                ts = self._run_single_agent(group[0], task)
+                transcripts.append(ts)
+            else:
+                with ThreadPoolExecutor(max_workers=min(max_parallel, len(group))) as pool:
+                    futures = {
+                        pool.submit(self._run_single_agent, t, task): t
+                        for t in group
+                    }
+                    for fut in as_completed(futures):
+                        try:
+                            transcripts.append(fut.result())
+                        except Exception as e:
+                            transcripts.append(AgentTranscript(
+                                agent=futures[fut].get("agent", "unknown"),
+                                role="coordinator-dispatched",
+                                ok=False,
+                                error=str(e),
+                            ))
+
+        return transcripts
+
+    def _run_single_agent(self, assignment: Dict[str, Any], task: Task) -> AgentTranscript:
+        """Execute a single agent assignment dispatched by the coordinator."""
+        agent_name = assignment.get("agent", "unknown")
+        agent_task = assignment.get("task", "")
+
+        prompt = (
+            f"你是 {agent_name}。\n\n"
+            f"总任务：{task.intent}\n"
+            f"你的具体任务：{agent_task}\n\n"
+            f"请完成任务并输出结果。"
+        )
+
+        ts = AgentTranscript(agent=agent_name, role="coordinator-dispatched")
+        t0 = time.time()
+        try:
+            output = self._call_llm(prompt)
+            ts.raw_response = output or ""
+            ts.summary = (output or "").strip()[:300]
+        except Exception as e:
+            ts.ok = False
+            ts.error = str(e)
+        ts.duration_ms = int((time.time() - t0) * 1000)
+        return ts
+
+    def _call_llm(self, prompt: str) -> str:
+        """Convenience wrapper: call self.llm_chat with a single user prompt."""
+        if not self.llm_chat:
+            raise RuntimeError("llm_chat not configured")
+        return self.llm_chat([{"role": "user", "content": prompt}])
+
     def _run_shield(self, task: Task, content: str, report: AgentReport) -> None:
         """@shield 最终安全审查：基础 PII / 敏感词扫描。"""
         ts = AgentTranscript(agent="@shield", role="safety-auditor")

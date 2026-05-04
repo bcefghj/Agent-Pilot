@@ -125,6 +125,35 @@ BASH_UNSAFE_PATTERNS: List[tuple] = [
 ]
 
 
+TOOL_RISK_LEVELS: Dict[str, str] = {
+    # safe: 只读操作，无需确认
+    "doc.get": "safe",
+    "doc.search": "safe",
+    "im.fetch_thread": "safe",
+    "lark.docs.read": "safe",
+    "lark.sheets.read": "safe",
+    "lark.calendar.list": "safe",
+    "mentor.clarify": "safe",
+    "mentor.summarize": "safe",
+    "voice.transcribe": "safe",
+    # confirm: 写操作，需要用户确认
+    "doc.create": "confirm",
+    "doc.update": "confirm",
+    "doc.append": "confirm",
+    "doc.insert_image": "confirm",
+    "doc.insert_table": "confirm",
+    "canvas.create": "confirm",
+    "canvas.add_shape": "confirm",
+    "slide.generate": "confirm",
+    "slide.rehearse": "confirm",
+    "lark.docs.create": "confirm",
+    "lark.messenger.send": "confirm",
+    "lark.tasks.create": "confirm",
+    # dangerous: 高影响操作，需要管理员或双重确认
+    "archive.bundle": "dangerous",
+}
+
+
 @dataclass
 class PermissionGate:
     """Central permission gate: 7 layers of check."""
@@ -205,6 +234,18 @@ class PermissionGate:
         if dec1.decision == Decision.DENY:
             self._track_deny(tool)
             return dec1
+
+        # Tool risk level classification (safe/confirm/dangerous)
+        risk = TOOL_RISK_LEVELS.get(tool)
+        if risk == "safe":
+            return PermissionDecision(Decision.ALLOW, tool, layer="risk_level_safe",
+                                      reason="tool classified as safe (read-only)")
+        if risk == "dangerous":
+            return PermissionDecision(Decision.ASK, tool, layer="risk_level_dangerous",
+                                      reason="tool classified as dangerous (requires admin / double confirmation)")
+        if risk == "confirm" and dec1.decision == Decision.PASSTHROUGH:
+            dec1 = PermissionDecision(Decision.ASK, tool, layer="risk_level_confirm",
+                                      reason="tool classified as confirm (write operation)")
 
         # L4: bash safety
         dec4 = self._tier4_bash(tool, input_repr)

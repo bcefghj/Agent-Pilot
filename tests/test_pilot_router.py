@@ -228,8 +228,12 @@ def test_router_action_confirm_context_runs_planner(router):
     assert res.verdict == "ctx_confirmed"
     task = router.task_service.get(res1.task_id)
     assert task.plan is not None
-    # state advanced past PLANNING (orchestrator not yet invoked) so still PLANNING
-    assert task.state == TaskState.PLANNING
+    # orchestrator runs in background thread and may advance state past PLANNING
+    import time; time.sleep(0.1)
+    task = router.task_service.get(res1.task_id)
+    assert task.state in (TaskState.PLANNING, TaskState.DOC_GENERATING,
+                          TaskState.PPT_GENERATING, TaskState.CANVAS_GENERATING,
+                          TaskState.REVIEWING)
 
 
 def test_router_unknown_action_returns_error(router):

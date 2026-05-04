@@ -5,7 +5,7 @@
 > AI Agent 主驾驶 · 三线产品（@shield 消息守护 + @mentor 表达带教 + **@pilot 主驾驶**）· Claude Code 7 支柱借鉴 · 6 级 Memory · y-websocket CRDT 多端同步 · 4 模型供应商（豆包 / MiniMax M2.7 / DeepSeek / Kimi）
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue)]()
-[![Tests](https://img.shields.io/badge/PRD%20unit-169%2F169-brightgreen)]()
+[![Tests](https://img.shields.io/badge/PRD%20unit-185%2F185-brightgreen)]()
 [![Promptfoo](https://img.shields.io/badge/Red%20Team-32%2F32%20OWASP%20LLM%20Top10-green)]()
 [![Multi-Agent](https://img.shields.io/badge/Multi--Agent-Builder--Validator--Citation-purple)]()
 [![CRDT](https://img.shields.io/badge/y--websocket-offline%20merge-violet)]()
@@ -15,6 +15,23 @@
 **主驾驶舱**：http://118.178.242.26/v7/pilot &nbsp;|&nbsp;
 **6 级 Memory**：http://118.178.242.26/v7/memory &nbsp;|&nbsp;
 **三线雷达**：http://118.178.242.26/v7/triad
+
+**快速启动**：
+```bash
+# 1. 克隆仓库
+git clone https://github.com/bcefghj/Agent-Pilot.git && cd Agent-Pilot
+
+# 2. 配置环境变量
+cp .env.example .env  # 编辑 .env 填入飞书 APP_ID/SECRET 和 LLM API Key
+
+# 3. Docker 一键启动
+docker-compose up -d
+
+# 4. 访问
+# Dashboard: http://localhost:8001
+# API 文档: http://localhost:8001/docs
+# Pilot 驾驶舱: http://localhost:8001/v7/pilot
+```
 
 📖 [PRD 实现地图](docs/PRD_IMPLEMENTATION.md) · [演化历程 v3→v7](docs/EVOLUTION.md) · [架构文档](docs/ARCHITECTURE_v6.md) · [立意完整版](docs/立意_工位上同时发生.md) · [5 分钟 Demo 脚本](docs/DEMO_SCRIPT.md) · [决策日志](docs/DECISIONS.md)
 
@@ -272,8 +289,8 @@ Enterprise → Workspace → Department → Group → User → Session 自动合
 ## 快速跑通（3 分钟）
 
 ```bash
-git clone https://github.com/bcefghj/larkmentor.git
-cd larkmentor
+git clone https://github.com/bcefghj/Agent-Pilot.git
+cd Agent-Pilot
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env       # 填入飞书 App ID / Secret、ARK API Key
@@ -545,8 +562,8 @@ Bot 返回：
 ### 第 1 步：克隆代码
 
 ```bash
-git clone https://github.com/bcefghj/larkmentor.git
-cd larkmentor
+git clone https://github.com/bcefghj/Agent-Pilot.git
+cd Agent-Pilot
 ```
 
 ### 第 2 步：创建虚拟环境并安装依赖

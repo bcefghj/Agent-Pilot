@@ -2,14 +2,14 @@ version: "3.9"
 services:
   larkmentor:
     build: .
-    container_name: larkmentor-v4
+    container_name: agent-pilot-v7
     restart: unless-stopped
     ports:
       - "8001:8001"    # dashboard + api
       - "8002:8002"    # sync (y-websocket)
       - "8767:8767"    # mcp http
     environment:
-      - LARKMENTOR_HOME=/data/larkmentor
+      - LARKMENTOR_HOME=/data/agent-pilot
       - FEISHU_APP_ID=${FEISHU_APP_ID}
       - FEISHU_APP_SECRET=${FEISHU_APP_SECRET}
       - DOUBAO_API_KEY=${DOUBAO_API_KEY}
@@ -19,7 +19,7 @@ services:
       - LARKMENTOR_PILOT_SHARE_SECRET=${LARKMENTOR_PILOT_SHARE_SECRET:-default-secret}
       - LARKMENTOR_USE_V3_MAIN_CHAIN=1
     volumes:
-      - larkmentor-data:/data
+      - agent-pilot-data:/data
       - ./.larkmentor:/app/.larkmentor:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8001/healthz"]
@@ -33,5 +33,5 @@ services:
     ports: ["6379:6379"]
     volumes: [redis-data:/data]
 volumes:
-  larkmentor-data: {}
+  agent-pilot-data: {}
   redis-data: {}

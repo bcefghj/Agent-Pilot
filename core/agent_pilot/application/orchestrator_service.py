@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 import traceback
@@ -48,6 +49,39 @@ from ..domain.events import (
 logger = logging.getLogger("pilot.application.orchestrator_service")
 
 
+def _default_llm_fn(prompt: str) -> str:
+    """Try providers -> llm_client -> return empty."""
+    try:
+        from agent.providers import default_providers
+        return default_providers().chat(
+            messages=[{"role": "user", "content": prompt}],
+            task_kind="chinese_chat",
+            max_tokens=2000,
+        )
+    except Exception:
+        pass
+    try:
+        from llm.llm_client import chat as _chat
+        return _chat(messages=[{"role": "user", "content": prompt}], temperature=0.4, max_tokens=2000)
+    except Exception:
+        return ""
+
+
+def _fallback_doc_content(intent: str, ctx: Dict[str, Any]) -> str:
+    plan_id = ctx.get("plan_id", "")
+    return (
+        f"## 背景与目标\n\n"
+        f"本文档由 Agent-Pilot 计划 `{plan_id}` 自动生成。\n\n"
+        f"任务目标：{intent}\n\n"
+        f"## 核心内容\n\n"
+        f"（Agent 正在分析上下文并生成内容...）\n\n"
+        f"## 下一步行动\n\n"
+        f"- [ ] 评审文档内容\n"
+        f"- [ ] 补充细节\n"
+        f"- [ ] 确认后转为 PPT\n"
+    )
+
+
 # tool function: (step, ctx) -> dict
 ToolFn = Callable[[DomainPlanStep, Dict[str, Any]], Dict[str, Any]]
 
@@ -67,11 +101,13 @@ class OrchestratorService:
         tools: Optional[Dict[str, ToolFn]] = None,
         event_bus: Optional[EventBus] = None,
         config: Optional[OrchestratorConfig] = None,
+        llm_fn: Optional[Callable[[str], str]] = None,
     ) -> None:
         self._tools: Dict[str, ToolFn] = dict(tools or {})
         self.bus = event_bus or default_event_bus()
         self.cfg = config or OrchestratorConfig()
         self._lock = threading.Lock()
+        self._llm_fn = llm_fn or _default_llm_fn
 
     def register_tool(self, name: str, fn: ToolFn) -> None:
         self._tools[name] = fn
@@ -169,6 +205,12 @@ class OrchestratorService:
 
         args = self._resolve_args(step.args or {}, ctx["step_results"])
 
+        # LLM content enrichment for doc/slide generation
+        if step.tool == "doc.append" and not args.get("markdown"):
+            args["markdown"] = self._enrich_doc_content(task, ctx)
+        elif step.tool == "slide.generate" and not args.get("outline"):
+            args["outline"] = self._enrich_slide_outline(task, ctx)
+
         tool_fn = self._tools.get(step.tool)
         if tool_fn is None:
             # tool 不在注册表 → 退化为模拟（评委环境无飞书 token 时也能跑过）
@@ -236,6 +278,58 @@ class OrchestratorService:
                         continue
             out[k] = v
         return out
+
+    def _enrich_doc_content(self, task: Task, ctx: Dict[str, Any]) -> str:
+        cp = task.context_pack
+        source_text = ""
+        if cp and cp.source_messages:
+            source_text = "\n".join(
+                f"- {m.sender_open_id}: {m.text}" for m in cp.source_messages[:10]
+            )
+        prompt = (
+            f"你是 Agent-Pilot，一个专业的文档生成助手。\n\n"
+            f"任务目标：{task.intent}\n\n"
+            f"上下文信息：\n{source_text or '(无额外上下文)'}\n\n"
+            f"请生成一份结构化的 Markdown 文档，包含：\n"
+            f"1. 背景与目标\n2. 核心内容\n3. 下一步行动\n\n"
+            f"要求：专业、简洁、可执行。直接输出 Markdown 内容，不要包含任何额外说明。"
+        )
+        result = self._llm_fn(prompt)
+        return result if result else _fallback_doc_content(task.intent, ctx)
+
+    def _enrich_slide_outline(self, task: Task, ctx: Dict[str, Any]) -> str:
+        step_results = ctx.get("step_results") or {}
+        doc_content = ""
+        for r in step_results.values():
+            if isinstance(r, dict) and r.get("source") in ("feishu", "local_markdown"):
+                path = r.get("path", "")
+                if path and os.path.exists(path):
+                    try:
+                        with open(path, "r", encoding="utf-8") as f:
+                            doc_content = f.read()[:3000]
+                    except Exception:
+                        pass
+        prompt = (
+            f"你是 Agent-Pilot，一个专业的演示文稿规划助手。\n\n"
+            f"任务目标：{task.intent}\n\n"
+            f"文档内容摘要：\n{doc_content or '(无已有文档内容)'}\n\n"
+            f"请生成一个 6-8 页的 PPT 大纲，每页包含标题和 3-4 个要点。\n"
+            f"输出格式为 JSON 数组：[{{\"title\": \"...\", \"bullets\": [\"...\"]}}]\n"
+            f"直接输出 JSON，不要包含 markdown 代码块标记。"
+        )
+        result = self._llm_fn(prompt)
+        if result:
+            import json as _json
+            try:
+                cleaned = result.strip()
+                if cleaned.startswith("```"):
+                    cleaned = "\n".join(cleaned.split("\n")[1:])
+                    if cleaned.endswith("```"):
+                        cleaned = cleaned[:-3]
+                return _json.loads(cleaned.strip())
+            except Exception:
+                pass
+        return ""
 
     def _finalize_failure(self, task: Task, error: str) -> None:
         try:

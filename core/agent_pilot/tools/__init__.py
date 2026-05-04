@@ -17,13 +17,14 @@ from .canvas_tool import canvas_create, canvas_add_shape
 from .slide_tool import slide_generate, slide_rehearse
 from .voice_tool import voice_transcribe
 from .archive_tool import archive_bundle
-from .im_tool import im_fetch_thread
+from .im_tool import im_fetch_thread, im_send_message
 from .mentor_tool import mentor_clarify, mentor_summarize
 
 
 def build_default_registry() -> Dict[str, Callable]:
     return {
         "im.fetch_thread": im_fetch_thread,
+        "im.send": im_send_message,
         "doc.create": doc_create,
         "doc.append": doc_append,
         "canvas.create": canvas_create,

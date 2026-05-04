@@ -1,4 +1,4 @@
-"""LarkMentor Dashboard - FastAPI realtime monitoring server.
+"""Agent-Pilot Dashboard - FastAPI realtime monitoring server.
 
 Endpoints:
     GET  /                     – static index.html
@@ -41,7 +41,13 @@ except ImportError as e:
     raise RuntimeError("Install fastapi & uvicorn: pip install fastapi uvicorn") from e
 
 
-app = FastAPI(title="LarkMentor Dashboard", version="3.0")
+app = FastAPI(
+    title="Agent-Pilot API",
+    description="Agent-Pilot v7 · 从 IM 对话到演示稿的一键智能闭环",
+    version="7.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 # P5.1: Prometheus /metrics + OpenTelemetry tracing; both optional.
 try:
@@ -230,7 +236,7 @@ async def index():
     idx = STATIC_DIR / "index.html"
     if idx.exists():
         return idx.read_text(encoding="utf-8")
-    return "<h1>LarkMentor Dashboard</h1><p>Static UI not built. See dashboard/static/index.html</p>"
+    return "<h1>Agent-Pilot Dashboard</h1><p>Static UI not built. See dashboard/static/index.html</p>"
 
 
 @app.get("/api/health")
@@ -661,6 +667,17 @@ async def pilot_dashboard_page():
     if page.exists():
         return page.read_text(encoding="utf-8")
     return "<h1>Agent-Pilot Dashboard</h1><p>Static UI not built yet.</p>"
+
+
+@app.get("/v7/pilot", response_class=HTMLResponse)
+@app.get("/v7", response_class=HTMLResponse)
+async def pilot_v7_dashboard():
+    """Agent-Pilot v7 三视角驾驶舱 (Pilot Tasks / 6-tier Memory / Triad Radar)."""
+    v7_dir = Path(__file__).parent / "static_v7"
+    page = v7_dir / "pilot_v7.html"
+    if page.exists():
+        return page.read_text(encoding="utf-8")
+    return "<h1>Agent-Pilot v7</h1><p>Run: create dashboard/static_v7/pilot_v7.html</p>"
 
 
 # ── Advanced Agent endpoints (clarify / summarise / recommend) ──

@@ -52,6 +52,7 @@ from core.agent_pilot.application import (
 )
 from core.agent_pilot.domain import (
     SourceMessage,
+    Task,
     TaskEvent,
     TaskState,
 )
@@ -92,6 +93,7 @@ class PilotRouter:
         intent_detector: Optional[IntentDetector] = None,
         context_service: Optional[ContextService] = None,
         planner_service: Optional[PlannerService] = None,
+        orchestrator_service: Optional['OrchestratorService'] = None,
         card_sender: Optional[CardSender] = None,
     ) -> None:
         self.task_service = task_service or default_task_service()
@@ -99,6 +101,13 @@ class PilotRouter:
         self.context_service = context_service or default_context_service()
         self.planner_service = planner_service or PlannerService(planner_factory=False)
         self.card_sender = card_sender or _default_card_sender
+        self.orchestrator_service = orchestrator_service
+        if orchestrator_service is None:
+            try:
+                from core.agent_pilot.application import default_orchestrator_service
+                self.orchestrator_service = default_orchestrator_service()
+            except Exception:
+                self.orchestrator_service = None
         # 保留群聊最近 N 条消息缓存（per chat_id）
         self._recent: Dict[str, List[ChatMessage]] = {}
         self._recent_max = 30
@@ -295,12 +304,10 @@ class PilotRouter:
         try:
             task = self.task_service.fire(task_id, TaskEvent.USER_CONFIRM_CONTEXT,
                                            actor_open_id=actor)
-            # 立即调 planner 生成 plan
             self.planner_service.plan_for_task(task)
         except Exception as e:
             return RouterResult(handled=False, task_id=task_id, error=str(e))
 
-        # 进度卡占位（cardkit.v1 后续 patch）
         card = cards_pilot.task_progress_card(
             task_id=task_id,
             state=task.state.value,
@@ -312,9 +319,18 @@ class PilotRouter:
             self.card_sender(actor, card, scope="user")
         except Exception:
             pass
+
+        import threading
+        t = threading.Thread(
+            target=self._async_orchestrate,
+            args=(task, actor),
+            daemon=True,
+        )
+        t.start()
+
         return RouterResult(handled=True, verdict="ctx_confirmed",
                              task_id=task_id, card=card,
-                             next_action="orchestrator_can_start")
+                             next_action="orchestrator_running")
 
     def _action_ignore(self, task_id: str, actor: str) -> RouterResult:
         try:
@@ -402,11 +418,130 @@ class PilotRouter:
 
     def _action_request_ppt(self, task_id: str, actor: str) -> RouterResult:
         try:
-            self.task_service.fire(task_id, TaskEvent.USER_REQUEST_PPT,
-                                    actor_open_id=actor)
+            task = self.task_service.fire(task_id, TaskEvent.USER_REQUEST_PPT,
+                                            actor_open_id=actor)
         except Exception as e:
             return RouterResult(handled=False, task_id=task_id, error=str(e))
+
+        import threading
+        t = threading.Thread(
+            target=self._async_generate_ppt,
+            args=(task, actor),
+            daemon=True,
+        )
+        t.start()
         return RouterResult(handled=True, verdict="ppt_requested", task_id=task_id)
+
+    # ── async orchestration ─────────────────────────────────────────────
+
+    def _async_orchestrate(self, task: Task, actor_open_id: str) -> None:
+        """Background thread: run orchestrator and send delivery card on completion."""
+        task_id = task.task_id
+        try:
+            if self.orchestrator_service is None:
+                logger.warning("orchestrator_service is None, skipping execution for %s", task_id)
+                return
+
+            self._send_progress(actor_open_id, task_id, 0.3, "正在生成文档...")
+
+            result_task = self.orchestrator_service.run(task, advance_state=True)
+
+            artifacts: List[Dict[str, Any]] = []
+            if result_task.plan:
+                for step in result_task.plan.steps:
+                    if step.status == "done" and step.result:
+                        r = step.result
+                        artifact: Dict[str, Any] = {}
+                        for key in ("doc_token", "url", "canvas_id", "slide_id",
+                                    "pptx_url", "share_url", "title", "local_path"):
+                            if r.get(key):
+                                artifact[key] = r[key]
+                        if artifact:
+                            artifact["tool"] = step.tool
+                            artifacts.append(artifact)
+
+            card = cards_pilot.task_delivered_card(
+                task_id=task_id,
+                artifacts=artifacts,
+                share_url=artifacts[-1].get("share_url", "") if artifacts else "",
+            )
+            try:
+                self.card_sender(actor_open_id, card, scope="user")
+            except Exception as e:
+                logger.warning("delivered card send failed: %s", e)
+
+            if task.source_chat_id and task.source_chat_id != actor_open_id:
+                try:
+                    self.card_sender(task.source_chat_id, card, scope="chat")
+                except Exception:
+                    pass
+
+            logger.info("orchestration completed for task %s, artifacts=%d",
+                         task_id, len(artifacts))
+
+        except Exception as e:
+            logger.exception("async orchestration failed for task %s: %s", task_id, e)
+            try:
+                error_card = cards_pilot.task_progress_card(
+                    task_id=task_id,
+                    state="failed",
+                    progress=0.0,
+                    current_step="执行失败",
+                    streaming_content=f"执行出错：{str(e)[:200]}",
+                )
+                self.card_sender(actor_open_id, error_card, scope="user")
+            except Exception:
+                pass
+
+    def _send_progress(self, target: str, task_id: str, progress: float, step: str) -> None:
+        try:
+            card = cards_pilot.task_progress_card(
+                task_id=task_id,
+                state="generating",
+                progress=progress,
+                current_step=step,
+                streaming_content=f"@pilot {step}",
+            )
+            self.card_sender(target, card, scope="user")
+        except Exception:
+            pass
+
+    def _async_generate_ppt(self, task: Task, actor_open_id: str) -> None:
+        """Generate PPT from existing doc artifacts."""
+        try:
+            from core.agent_pilot.tools.slide_tool import slide_generate
+            from core.agent_pilot.domain import PlanStep as DomainPlanStep
+
+            self._send_progress(actor_open_id, task.task_id, 0.5, "正在生成演示文稿...")
+
+            ctx: Dict[str, Any] = {
+                "task_id": task.task_id,
+                "plan_id": task.plan.plan_id if task.plan else task.task_id,
+                "owner_open_id": task.owner_lock.owner_open_id,
+                "step_results": {},
+                "resolved_args": {"title": task.title or task.intent[:30]},
+            }
+            if task.plan:
+                for step in task.plan.steps:
+                    if step.status == "done" and step.result:
+                        ctx["step_results"][step.step_id] = step.result
+
+            dummy_step = DomainPlanStep(step_id="ppt_gen", tool="slide.generate",
+                                         description="生成 PPT")
+            result = slide_generate(dummy_step, ctx)
+
+            artifacts = [{"tool": "slide.generate", **result}]
+            card = cards_pilot.task_delivered_card(
+                task_id=task.task_id,
+                artifacts=artifacts,
+                share_url=result.get("pptx_url", ""),
+            )
+            try:
+                self.card_sender(actor_open_id, card, scope="user")
+            except Exception:
+                pass
+        except Exception as e:
+            logger.exception("PPT generation failed: %s", e)
 
     # ── helpers ──────────────────────────────────────────────────────────
     def _build_initial_context(self, task) -> Dict[str, Any]:

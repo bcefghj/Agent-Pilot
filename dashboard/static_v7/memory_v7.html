@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang=zh>
+<head>
+<meta charset=utf-8>
+<title>6 级 Memory 时间线</title>
+<style>
+body { font-family: -apple-system, "PingFang SC", sans-serif; margin: 0; padding: 24px; background: #f7f8fa; }
+.tier { background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.tier h3 { margin-top: 0; color: #258; }
+.tier .file { padding: 8px; border-bottom: 1px dotted #eee; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+nav a { margin-right: 12px; color: #258; text-decoration: none; }
+</style>
+</head>
+<body>
+<nav><a href="/v7/pilot">Pilot 主驾驶舱</a><a href="/v7/memory">6 级 Memory 时间线</a><a href="/v7/triad">三线雷达</a></nav>
+<h1>6 级 Memory 时间线</h1>
+<p>低层覆盖高层：Enterprise → Workspace → Department → Group → User → Session</p>
+<div id=root>加载中…</div>
+<script>
+async function load() {
+  const r = await fetch('/api/v7/memory?tenant=default');
+  const data = await r.json();
+  if (!data.tiers || !data.tiers.length) {
+    document.getElementById('root').innerHTML =
+      '<em>暂无 markdown 内容（在 data/flow_memory_md/&lt;tier&gt;/&lt;id&gt;.md 创建）</em>';
+    return;
+  }
+  document.getElementById('root').innerHTML = data.tiers.map(t =>
+    `<div class=tier>
+       <h3>${t.tier}</h3>
+       ${t.files.map(f =>
+         `<div class=file><strong>${f.name}</strong> · ${f.size} bytes\n${f.content}</div>`
+       ).join('')}
+     </div>`
+  ).join('');
+}
+load();
+</script>
+</body>
+</html>

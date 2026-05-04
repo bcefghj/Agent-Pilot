@@ -47,6 +47,13 @@ from .intent_detector import (
     CooldownManager,
 )
 
+
+def default_orchestrator_service() -> OrchestratorService:
+    """Create an OrchestratorService with all default tools registered."""
+    from ..tools import build_default_registry
+    return OrchestratorService(tools=build_default_registry())
+
+
 __all__ = [
     "TaskService",
     "default_task_service",
@@ -66,6 +73,7 @@ __all__ = [
     "select_reasoning_pattern",
     "OrchestratorService",
     "OrchestratorConfig",
+    "default_orchestrator_service",
     "MultiAgentPipeline",
     "AgentReport",
     "AgentTranscript",

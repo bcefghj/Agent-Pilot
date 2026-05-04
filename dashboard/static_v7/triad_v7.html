@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang=zh>
+<head>
+<meta charset=utf-8>
+<title>三线协同雷达</title>
+<style>
+body { font-family: -apple-system, "PingFang SC", sans-serif; margin: 0; padding: 24px; background: #f7f8fa; }
+.line { background: white; border-radius: 8px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.line h2 { margin-top: 0; }
+.metric { display: inline-block; padding: 8px 16px; margin: 4px; background: #f0f4ff; border-radius: 6px; }
+.shield { border-left: 4px solid #c33; }
+.mentor { border-left: 4px solid #258; }
+.pilot { border-left: 4px solid #185; }
+nav a { margin-right: 12px; color: #258; text-decoration: none; }
+</style>
+</head>
+<body>
+<nav><a href="/v7/pilot">Pilot 主驾驶舱</a><a href="/v7/memory">6 级 Memory 时间线</a><a href="/v7/triad">三线雷达</a></nav>
+<h1>三线协同雷达</h1>
+<p>「工位上同时发生」立意工程兑现：左线 @shield + 右线 @mentor + 主线 @pilot 共享 KB / Recovery Card / FlowMemory</p>
+<div id=root>加载中…</div>
+<script>
+async function load() {
+  const r = await fetch('/api/v7/triad');
+  const d = await r.json();
+  document.getElementById('root').innerHTML = `
+    <div class="line shield">
+      <h2>🛡️ 左线 · @shield · 消息守护</h2>
+      <div class=metric>已拦截 <strong>${d.shield.intercepted}</strong> 条</div>
+      <div class=metric>P0/P1 紧急 <strong>${d.shield.p0_p1_alerts}</strong></div>
+    </div>
+    <div class="line mentor">
+      <h2>✍️ 右线 · @mentor · 表达带教</h2>
+      <div class=metric>草稿 <strong>${d.mentor.drafts}</strong></div>
+    </div>
+    <div class="line pilot">
+      <h2>🛫 主线 · @pilot · 主驾驶</h2>
+      <div class=metric>任务总数 <strong>${d.pilot.tasks_total}</strong></div>
+      <div class=metric>已交付 <strong>${d.pilot.tasks_delivered}</strong></div>
+      <div class=metric>自动 SKILL <strong>${d.pilot.skills_auto}</strong></div>
+    </div>
+  `;
+}
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

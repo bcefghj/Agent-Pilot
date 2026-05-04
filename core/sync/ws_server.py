@@ -28,8 +28,11 @@ mounted from ``dashboard/server.py`` when available.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
+import os
 import uuid
 from typing import Any, Dict
 
@@ -50,6 +53,22 @@ except Exception:  # pragma: no cover
 router = APIRouter(prefix="/sync") if _FASTAPI else None
 
 
+def _verify_ws_token(token: str) -> bool:
+    """Verify WebSocket connection token.
+
+    Accepts:
+    - The configured share secret
+    - 'demo' token in demo mode
+    - Any token if no secret is configured (open mode for development)
+    """
+    secret = os.getenv("LARKMENTOR_PILOT_SHARE_SECRET", "")
+    if not secret or secret == "default-secret":
+        return True  # open mode
+    if os.getenv("DASHBOARD_DEMO_MODE", "").lower() == "true" and token == "demo":
+        return True
+    return hmac.compare_digest(token, secret)
+
+
 if _FASTAPI:
 
     @router.get("/health")
@@ -67,6 +86,10 @@ if _FASTAPI:
 
     @router.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
+        token = ws.query_params.get("token", "")
+        if not _verify_ws_token(token):
+            await ws.close(code=4001, reason="invalid_token")
+            return
         await ws.accept()
         hub = default_hub()
         client_id = f"ws_{uuid.uuid4().hex[:8]}"

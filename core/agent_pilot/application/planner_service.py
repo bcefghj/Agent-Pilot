@@ -85,6 +85,20 @@ def select_reasoning_pattern(task: Task, ctx: ContextPack,
         return PatternSelection(ReasoningPattern.REACT,
                                 reason="短指令 + 单一明确动作")
 
+    # Context complexity analysis
+    cp = task.context_pack if hasattr(task, "context_pack") else ctx
+    source_count = len(cp.source_messages) if cp and cp.source_messages else 0
+    material_count = len(cp.user_added_materials) if cp and cp.user_added_materials else 0
+    total_context = source_count + material_count
+
+    if total_context > 15:
+        return PatternSelection(ReasoningPattern.REFLECTION,
+                                reason=f"上下文复杂度高 ({total_context} 条资料)，启用 Builder-Validator")
+
+    if total_context > 8 and any(k in text for k in _FANOUT_KEYWORDS):
+        return PatternSelection(ReasoningPattern.TOT,
+                                reason=f"中等复杂度 + 并行语义，启用 Tree-of-Thoughts")
+
     return PatternSelection(default, reason="默认中等单轮 CoT")
 
 

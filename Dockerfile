@@ -1,4 +1,4 @@
-# LarkMentor v4 · Production container
+# Agent-Pilot v7 · Production container
 FROM python:3.12-slim AS builder
 WORKDIR /app
 COPY requirements.txt .
@@ -22,7 +22,8 @@ COPY . .
 RUN npx skills add larksuite/cli -y -g 2>&1 | tail -3 || echo "skills add skipped"
 
 EXPOSE 8001 8002 8767
-ENV LARKMENTOR_HOME=/data/larkmentor
+ENV AGENT_PILOT_HOME=/data/agent-pilot
+ENV LARKMENTOR_HOME=/data/agent-pilot
 ENV LARKMENTOR_USE_V3_MAIN_CHAIN=1
 VOLUME ["/data"]
 

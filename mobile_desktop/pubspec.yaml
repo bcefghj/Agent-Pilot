@@ -1,7 +1,7 @@
-name: larkmentor_pilot
-description: LarkMentor Agent-Pilot Co-pilot GUI - iOS / Android / macOS / Windows.
+name: agent_pilot
+description: Agent-Pilot v7 · 从 IM 对话到演示稿的一键智能闭环 (iOS / Android / macOS / Windows)
 publish_to: none
-version: 2.0.0+1
+version: 7.0.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

@@ -265,6 +265,49 @@ class ContextManager:
         after = self._total_tokens(new_messages)
         return new_messages, CompactionEvent("autocompact", before, after, len(messages) - len(new_messages), reason="budget>92%, 9-section rewrite")
 
+    # ── Prompt Cache ───────────────────────────────────
+
+    def build_cached_messages(self, messages: List[Dict[str, Any]], *,
+                               project_rules: str = "",
+                               env_state: str = "") -> List[Dict[str, Any]]:
+        """Build messages with 3-tier cache breakpoints (inspired by Claude Code).
+
+        L1: System prompt + tool schema (nearly immutable)
+        L2: Project rules / CLAUDE.md equivalent (stable within session)
+        L3: Environment state like git status (changes each turn)
+        """
+        result = []
+
+        for msg in messages:
+            if msg.get("role") == "system":
+                content = msg.get("content", "")
+                if any(k in content for k in ("You are", "你是", "TOOLS", "MEMORY RECALL")):
+                    result.append({**msg, "_cache_tier": "L1", "_cache_hint": "immutable"})
+                elif any(k in content for k in ("CLAUDE.md", "SKILL.md", "MEMORY", "memory")):
+                    result.append({**msg, "_cache_tier": "L2", "_cache_hint": "session_stable"})
+                else:
+                    result.append({**msg, "_cache_tier": "L3", "_cache_hint": "per_turn"})
+            else:
+                result.append(msg)
+
+        if project_rules:
+            result.insert(1, {
+                "role": "system",
+                "content": f"=== PROJECT RULES (L2 cache) ===\n{project_rules}",
+                "_cache_tier": "L2",
+                "_cache_hint": "session_stable",
+            })
+
+        if env_state:
+            result.append({
+                "role": "system",
+                "content": f"=== ENVIRONMENT STATE (L3 cache) ===\n{env_state}",
+                "_cache_tier": "L3",
+                "_cache_hint": "per_turn",
+            })
+
+        return result
+
     # ── Helpers ───────────────────────────────────────
 
     def _total_tokens(self, messages: List[Dict]) -> int:
