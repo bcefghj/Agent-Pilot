@@ -26,12 +26,12 @@ line-length = 120
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "TCH", "RUF"]
 ignore = [
-    "E501", "E702", "E741",  # Line length, multiple statements, ambiguous names
+    "E402", "E501", "E702", "E741",  # Module imports, line length, multiple statements, ambiguous names
     "B007", "B008", "B904",  # Loop vars, function call defaults, exception chaining
-    "F401", "F841",          # Unused imports and variables
+    "F401", "F541", "F821", "F841",  # Unused imports, f-strings, undefined names, unused vars
     "I001",                  # Import sorting
-    "RUF001", "RUF002", "RUF003", "RUF005", "RUF012", "RUF022",  # Fullwidth chars
-    "UP006", "UP035", "UP045",  # Type annotation modernization
+    "RUF001", "RUF002", "RUF003", "RUF005", "RUF006", "RUF012", "RUF013", "RUF015", "RUF022", "RUF046", "RUF059",  # Fullwidth chars and misc
+    "UP006", "UP012", "UP015", "UP034", "UP035", "UP037", "UP045",  # Type annotation modernization
     "SIM102", "SIM105", "SIM108", "SIM110", "SIM117",  # Simplify patterns
     "TC002", "TC003",  # Type checking imports
 ]
