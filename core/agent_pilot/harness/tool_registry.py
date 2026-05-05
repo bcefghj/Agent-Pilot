@@ -236,9 +236,45 @@ def _populate_default(reg: ToolRegistry) -> None:
         )
     logger.info("default ToolRegistry populated with %d legacy tools", len(reg.names()))
 
-    # Bridge: also include decorator-registered tools from agent/tools/registry.py
-    # NOTE: skipped to avoid circular dependency (sync_to_harness_registry → default_registry → deadlock)
-    pass
+    _register_feishu_cli_tools(reg)
+
+
+def _register_feishu_cli_tools(reg: ToolRegistry) -> None:
+    """Register Feishu CLI skills as tools backed by subprocess calls."""
+    try:
+        from core.feishu_cli.mcp_config import FEISHU_CLI_SKILLS, run_cli_command
+    except Exception as e:
+        logger.debug("feishu CLI skills not loaded: %s", e)
+        return
+
+    readonly_skills = {"lark-search", "lark-contact", "lark-lingo", "lark-minutes", "lark-event"}
+
+    for skill_id, skill in FEISHU_CLI_SKILLS.items():
+        commands = skill.get("commands", [])
+        if not commands:
+            continue
+        first_cmd = commands[0]
+
+        def _make_fn(cmd_template: str):
+            def _cli_fn(args: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+                params = {k: str(v) for k, v in args.items() if v}
+                return run_cli_command(cmd_template, params)
+            return _cli_fn
+
+        reg.register(
+            build_tool(
+                name=f"cli.{skill_id}",
+                description=f"飞书 CLI: {skill['description']} ({len(commands)} commands)",
+                fn=_make_fn(first_cmd),
+                parameters={},
+                readonly=skill_id in readonly_skills,
+                category="feishu-cli",
+                timeout_sec=30,
+                tags=["feishu", "cli", skill_id],
+            )
+        )
+
+    logger.info("registered %d feishu CLI skills as tools", len(FEISHU_CLI_SKILLS))
 
 
 def _fn_shim(legacy_fn, args: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:

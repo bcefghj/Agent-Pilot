@@ -47,13 +47,23 @@ try:
 except ImportError as e:
     raise RuntimeError("Install fastapi & uvicorn: pip install fastapi uvicorn") from e
 
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app):
+    app.state.start_ts = time.time()
+    asyncio.create_task(_broadcast_loop())
+    yield
+
 
 app = FastAPI(
     title="Agent-Pilot API",
-    description="Agent-Pilot v9 · 从 IM 对话到演示稿的一键智能闭环",
-    version="9.0.0",
+    description="Agent-Pilot v11 · 从 IM 对话到演示稿的一键智能闭环",
+    version="11.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # ── API v1 Router (P0-4) ──
@@ -343,12 +353,6 @@ def _real_heatmap() -> List[List[int]]:
 # ----- routes -----
 
 
-@app.on_event("startup")
-async def _startup():
-    app.state.start_ts = time.time()
-    asyncio.create_task(_broadcast_loop())
-
-
 @app.get("/", response_class=HTMLResponse)
 async def index():
     idx = STATIC_DIR / "index.html"
@@ -360,7 +364,7 @@ async def index():
 @app.get("/health")
 async def health_check():
     """Kubernetes-style liveness probe."""
-    return {"status": "ok", "version": "9.0.0", "timestamp": time.time()}
+    return {"status": "ok", "version": "11.0.0", "timestamp": time.time()}
 
 
 @app.get("/ready")
@@ -377,17 +381,17 @@ async def readiness_check():
 @router_v1.get("/version")
 async def get_version():
     return {
-        "version": "9.0.0",
+        "version": "11.0.0",
         "name": "Agent-Pilot",
         "python": sys.version,
-        "features": ["orchestrator_v2", "mcp", "crdt", "function_calling"],
+        "features": ["orchestrator_v2", "mcp", "crdt", "function_calling", "harness_v2", "lark_cli_skills", "exec_trace"],
     }
 
 
 @app.get("/api/health")
 async def health_legacy():
     """Legacy health endpoint (backward compat)."""
-    return {"status": "ok", "version": "9.0.0", "mode": "demo" if DEMO_MODE else "live"}
+    return {"status": "ok", "version": "11.0.0", "mode": "demo" if DEMO_MODE else "live"}
 
 
 @app.get("/api/overview")
@@ -474,86 +478,32 @@ async def users():
 
 @router_v1.get("/overview")
 async def v1_overview():
-    return _demo_overview() if DEMO_MODE else _real_overview()
+    return await overview()
 
 
 @router_v1.get("/decisions")
 async def v1_decisions(limit: int = Query(30, ge=1, le=200)):
-    if DEMO_MODE:
-        return _demo_decisions(limit)
-    raw = _decisions()
-    out = raw if isinstance(raw, list) else []
-    out = [d for d in out if isinstance(d, dict)]
-    out = sorted(out, key=lambda d: d.get("ts", 0), reverse=True)[:limit]
-    return out
+    return await decisions(limit)
 
 
 @router_v1.get("/profiles")
 async def v1_profiles(limit: int = Query(10, ge=1, le=100)):
-    if DEMO_MODE:
-        return _demo_profiles(limit)
-    raw = _profiles()
-    if not isinstance(raw, dict):
-        raw = {}
-    items = []
-    for sid, p in raw.items():
-        if not isinstance(p, dict):
-            continue
-        items.append(
-            {
-                "sender_id": sid,
-                "sender_name": p.get("name", sid[-8:]),
-                "identity_tag": p.get("identity_tag", "unknown"),
-                "relation_strength": round(p.get("relation_strength", 0.0), 2),
-                "msg_count_total": p.get("msg_count_total", 0),
-                "user_responded_count": p.get("user_responded_count", 0),
-                "importance_bias": round(p.get("importance_bias", 0.0), 2),
-            }
-        )
-    items.sort(key=lambda x: x["msg_count_total"], reverse=True)
-    return items[:limit]
+    return await profiles(limit)
 
 
 @router_v1.get("/heatmap")
 async def v1_heatmap():
-    return {"grid": _demo_heatmap() if DEMO_MODE else _real_heatmap()}
+    return await heatmap()
 
 
 @router_v1.get("/users")
 async def v1_users():
-    if DEMO_MODE:
-        return [
-            {
-                "user_id": f"u_demo_{i}",
-                "name": ["李洁盈", "戴尚好", "评委 A", "评委 B", "测试用户"][i],
-                "in_focus": i % 2 == 0,
-                "tasks": random.randint(0, 4),
-                "pending_msgs": random.randint(0, 12),
-            }
-            for i in range(5)
-        ]
-    raw_states = _user_states()
-    states = raw_states if isinstance(raw_states, dict) else {}
-    out = []
-    for uid, s in states.items():
-        if not isinstance(s, dict):
-            continue
-        fm = s.get("focus_mode", {}) if isinstance(s.get("focus_mode"), dict) else {}
-        out.append(
-            {
-                "user_id": uid,
-                "name": s.get("name", uid[-8:]),
-                "in_focus": fm.get("enabled", False),
-                "tasks": len(s.get("tasks", [])),
-                "pending_msgs": len(s.get("pending_msgs", [])),
-            }
-        )
-    return out
+    return await users()
 
 
 @router_v1.get("/health")
 async def v1_health():
-    return {"status": "ok", "version": "9.0.0", "timestamp": time.time()}
+    return await health_legacy()
 
 
 @app.get("/demo")
@@ -993,28 +943,43 @@ _DAG_HTML = """\
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-     background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+     background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column}
 header{width:100%;padding:16px 24px;background:#1e293b;display:flex;align-items:center;gap:12px;
        border-bottom:1px solid #334155}
 header h1{font-size:18px;font-weight:600}
 header .badge{font-size:12px;padding:2px 8px;border-radius:9999px;background:#334155}
-#intent{font-size:13px;color:#94a3b8;margin-top:4px;max-width:600px;overflow:hidden;
+#intent{font-size:13px;color:#94a3b8;padding:4px 24px;max-width:800px;overflow:hidden;
         text-overflow:ellipsis;white-space:nowrap}
 #status-bar{font-size:12px;color:#64748b;padding:8px 24px;width:100%}
-#dag-container{flex:1;width:100%;display:flex;justify-content:center;align-items:flex-start;
-               padding:32px 16px;overflow:auto}
-#dag-container .mermaid svg{max-width:100%}
-.legend{display:flex;gap:16px;padding:12px 24px;flex-wrap:wrap}
+.main-layout{display:flex;flex:1;overflow:hidden}
+#dag-container{flex:1;display:flex;justify-content:center;align-items:flex-start;
+               padding:24px 16px;overflow:auto}
+#dag-container .mermaid svg{max-width:100%;cursor:pointer}
+#detail-panel{width:380px;background:#1e293b;border-left:1px solid #334155;overflow-y:auto;
+              transition:width .2s;padding:0}
+#detail-panel.collapsed{width:0;padding:0;overflow:hidden}
+#detail-panel .panel-header{padding:12px 16px;font-size:14px;font-weight:600;
+                             border-bottom:1px solid #334155;display:flex;justify-content:space-between}
+#detail-panel .panel-body{padding:12px 16px;font-size:13px;line-height:1.6}
+#detail-panel .field{margin-bottom:10px}
+#detail-panel .field-label{color:#94a3b8;font-size:11px;text-transform:uppercase;margin-bottom:2px}
+#detail-panel .field-value{color:#e2e8f0;word-break:break-all}
+#detail-panel .status-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.legend{display:flex;gap:16px;padding:8px 24px;flex-wrap:wrap}
 .legend span{display:flex;align-items:center;gap:4px;font-size:12px}
 .legend .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
 .dot-done{background:#22c55e}.dot-running{background:#eab308}
 .dot-failed{background:#ef4444}.dot-pending{background:#64748b}
 #error-box{color:#fca5a5;padding:16px 24px;display:none}
+#log-stream{max-height:200px;overflow-y:auto;background:#0f172a;border-radius:6px;
+            margin-top:8px;padding:8px;font-family:monospace;font-size:11px;line-height:1.5}
+#log-stream .log-entry{color:#94a3b8;border-bottom:1px solid #1e293b;padding:2px 0}
+#log-stream .log-entry.error{color:#fca5a5}
 </style>
 </head>
 <body>
 <header>
-  <h1>Agent-Pilot DAG</h1>
+  <h1>Agent-Pilot v11 DAG</h1>
   <span class="badge" id="plan-badge">{{PLAN_ID}}</span>
 </header>
 <div id="intent"></div>
@@ -1026,20 +991,27 @@ header .badge{font-size:12px;padding:2px 8px;border-radius:9999px;background:#33
 </div>
 <div id="status-bar">Loading…</div>
 <div id="error-box"></div>
-<div id="dag-container"><div class="mermaid" id="mermaid-target"></div></div>
+<div class="main-layout">
+  <div id="dag-container"><div class="mermaid" id="mermaid-target"></div></div>
+  <div id="detail-panel" class="collapsed">
+    <div class="panel-header"><span>Step Details</span><button onclick="closeDetail()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px">&times;</button></div>
+    <div class="panel-body" id="detail-body"></div>
+  </div>
+</div>
 
 <script>
 const PLAN_ID = "{{PLAN_ID}}";
 const STATUS_COLOR = {done:"#22c55e",running:"#eab308",failed:"#ef4444",pending:"#64748b"};
+let currentSteps = [];
+let logEntries = [];
 
 mermaid.initialize({startOnLoad:false,theme:"dark",flowchart:{curve:"basis",padding:16}});
 
 function buildMermaid(steps){
   let lines = ["graph TD"];
   for(const s of steps){
-    const label = s.description||s.tool;
-    const clean = label.replace(/"/g,"'");
-    lines.push('  '+s.step_id+'["'+clean+'"]');
+    const label = (s.description||s.tool).replace(/"/g,"'");
+    lines.push('  '+s.step_id+'["'+label+'"]');
     const color = STATUS_COLOR[s.status]||STATUS_COLOR.pending;
     lines.push('  style '+s.step_id+' fill:'+color+',stroke:'+color+',color:#fff');
     for(const dep of (s.depends_on||[])){
@@ -1049,20 +1021,59 @@ function buildMermaid(steps){
   return lines.join("\\n");
 }
 
+function showStepDetail(stepId){
+  const step = currentSteps.find(s=>s.step_id===stepId);
+  if(!step) return;
+  const panel = document.getElementById("detail-panel");
+  const body = document.getElementById("detail-body");
+  const statusColors = {done:"#22c55e",running:"#eab308",failed:"#ef4444",pending:"#64748b"};
+  const color = statusColors[step.status]||statusColors.pending;
+  let html = '<div class="field"><div class="field-label">Step ID</div><div class="field-value"><code>'+step.step_id+'</code></div></div>';
+  html += '<div class="field"><div class="field-label">Tool</div><div class="field-value">'+step.tool+'</div></div>';
+  html += '<div class="field"><div class="field-label">Status</div><div class="field-value"><span class="status-badge" style="background:'+color+'">'+step.status+'</span></div></div>';
+  html += '<div class="field"><div class="field-label">Description</div><div class="field-value">'+(step.description||'-')+'</div></div>';
+  if(step.error) html += '<div class="field"><div class="field-label">Error</div><div class="field-value" style="color:#fca5a5">'+step.error+'</div></div>';
+  if(step.depends_on&&step.depends_on.length) html += '<div class="field"><div class="field-label">Dependencies</div><div class="field-value">'+step.depends_on.join(', ')+'</div></div>';
+  if(step.result) html += '<div class="field"><div class="field-label">Result Keys</div><div class="field-value">'+Object.keys(step.result).join(', ')+'</div></div>';
+  html += '<div class="field"><div class="field-label">Live Log</div><div id="log-stream">';
+  const stepLogs = logEntries.filter(l=>(l.step_id||"")==stepId || (l.payload&&l.payload.step_id==stepId));
+  for(const l of stepLogs.slice(-20)){
+    html += '<div class="log-entry'+(l.kind==="error"?" error":"")+'">['+(l.ts||"")+ '] '+JSON.stringify(l.payload||l).substring(0,200)+'</div>';
+  }
+  if(!stepLogs.length) html += '<div class="log-entry">Waiting for events…</div>';
+  html += '</div></div>';
+  body.innerHTML = html;
+  panel.classList.remove("collapsed");
+}
+
+function closeDetail(){document.getElementById("detail-panel").classList.add("collapsed")}
+
+function attachClickHandlers(){
+  document.querySelectorAll("#mermaid-target .node").forEach(node=>{
+    node.style.cursor="pointer";
+    node.addEventListener("click",function(){
+      const id = this.id.replace(/^flowchart-/,"").replace(/-\\d+$/,"");
+      showStepDetail(id);
+    });
+  });
+}
+
 async function renderDag(){
   try{
     const resp = await fetch("/api/pilot/plan/"+PLAN_ID);
     if(!resp.ok){document.getElementById("error-box").textContent="Plan not found ("+resp.status+")";
                   document.getElementById("error-box").style.display="block";return;}
     const plan = await resp.json();
+    currentSteps = plan.steps||[];
     document.getElementById("intent").textContent = plan.intent||"";
-    const code = buildMermaid(plan.steps||[]);
+    const code = buildMermaid(currentSteps);
     const target = document.getElementById("mermaid-target");
-    const {svg} = await mermaid.render("dag-svg", code);
+    const {svg} = await mermaid.render("dag-svg-"+Date.now(), code);
     target.innerHTML = svg;
-    const done = (plan.steps||[]).filter(s=>s.status==="done").length;
+    attachClickHandlers();
+    const done = currentSteps.filter(s=>s.status==="done").length;
     document.getElementById("status-bar").textContent =
-      "Steps: "+done+"/"+(plan.steps||[]).length+" done · updated "+new Date().toLocaleTimeString();
+      "Steps: "+done+"/"+currentSteps.length+" done · updated "+new Date().toLocaleTimeString();
   }catch(e){
     document.getElementById("error-box").textContent = "Error: "+e;
     document.getElementById("error-box").style.display = "block";
@@ -1074,6 +1085,8 @@ function connectSSE(){
   es.onmessage = function(e){
     try{
       const d = JSON.parse(e.data);
+      logEntries.push({...d, ts:new Date().toLocaleTimeString()});
+      if(logEntries.length>200) logEntries = logEntries.slice(-200);
       const ev = d.event||d.state||{};
       if(ev.type==="step_status_changed"||ev.type==="plan_done"||d.kind==="state"){
         renderDag();
@@ -1093,6 +1106,7 @@ renderDag().then(connectSSE);
 """
 
 
+@app.get("/v11/dag/{plan_id}", response_class=HTMLResponse)
 @app.get("/v10/dag/{plan_id}", response_class=HTMLResponse)
 async def dag_visualization(plan_id: str):
     """Self-contained DAG visualization page (Mermaid.js).
@@ -1103,24 +1117,24 @@ async def dag_visualization(plan_id: str):
     return _DAG_HTML.replace("{{PLAN_ID}}", plan_id)
 
 
+@app.get("/v11/dashboard", response_class=HTMLResponse)
 @app.get("/dashboard/pilot", response_class=HTMLResponse)
 @app.get("/pilot", response_class=HTMLResponse)
 async def pilot_dashboard_page():
     page = STATIC_DIR / "pilot.html"
     if page.exists():
         return page.read_text(encoding="utf-8")
-    return "<h1>Agent-Pilot Dashboard</h1><p>Static UI not built yet.</p>"
+    return "<h1>Agent-Pilot v11 Dashboard</h1><p>Static UI not built yet.</p>"
 
 
 @app.get("/v7/pilot", response_class=HTMLResponse)
 @app.get("/v7", response_class=HTMLResponse)
 async def pilot_v7_dashboard():
-    """Agent-Pilot v7 三视角驾驶舱 (Pilot Tasks / 6-tier Memory / Triad Radar)."""
     v7_dir = Path(__file__).parent / "static_v7"
     page = v7_dir / "pilot_v7.html"
     if page.exists():
         return page.read_text(encoding="utf-8")
-    return "<h1>Agent-Pilot v7</h1><p>Run: create dashboard/static_v7/pilot_v7.html</p>"
+    return HTMLResponse(status_code=301, headers={"Location": "/v11/dashboard"})
 
 
 # ── Advanced Agent endpoints (clarify / summarise / recommend) ──
@@ -1171,6 +1185,73 @@ async def pilot_recommend(plan_id: str):
         if not plan:
             return JSONResponse({"error": "not_found"}, status_code=404)
         return {"plan_id": plan_id, "next_steps": recommend_next_steps(plan.to_dict())}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/pilot/trace/{plan_id}")
+async def pilot_trace(plan_id: str):
+    """Execution trace for a plan: step-by-step inputs, outputs, timing, tokens."""
+    try:
+        from core.agent_pilot.service import get_plan
+
+        plan = get_plan(plan_id)
+        if not plan:
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        steps_trace = []
+        for s in plan.steps:
+            steps_trace.append({
+                "step_id": s.step_id,
+                "tool": s.tool,
+                "status": s.status,
+                "description": s.description,
+                "started_ts": getattr(s, "started_ts", 0),
+                "finished_ts": getattr(s, "finished_ts", 0),
+                "duration_ms": (
+                    (getattr(s, "finished_ts", 0) - getattr(s, "started_ts", 0)) * 1000
+                    if getattr(s, "finished_ts", 0) and getattr(s, "started_ts", 0)
+                    else 0
+                ),
+                "error": s.error or "",
+                "result_keys": list((s.result or {}).keys()) if s.result else [],
+                "depends_on": s.depends_on or [],
+            })
+        return {
+            "plan_id": plan_id,
+            "intent": plan.intent,
+            "total_steps": len(plan.steps),
+            "steps": steps_trace,
+            "meta": plan.meta or {},
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/pilot/cost")
+async def pilot_cost_summary():
+    """Aggregate cost and token usage across recent plans."""
+    try:
+        from core.agent_pilot.harness.orchestrator_v2 import default_orchestrator
+
+        orch = default_orchestrator()
+        events = orch.events()
+        plan_done_events = [e for e in events if e.get("kind") == "plan_done"]
+        total_tokens = sum(e.get("payload", {}).get("total_tokens", 0) for e in plan_done_events)
+        total_cost = sum(e.get("payload", {}).get("cost_usd", 0.0) for e in plan_done_events)
+        return {
+            "plans_completed": len(plan_done_events),
+            "total_tokens": total_tokens,
+            "total_cost_usd": round(total_cost, 4),
+            "recent_plans": [
+                {
+                    "plan_id": e.get("plan_id", ""),
+                    "verdict": e.get("payload", {}).get("verdict", ""),
+                    "tokens": e.get("payload", {}).get("total_tokens", 0),
+                    "elapsed_sec": e.get("payload", {}).get("elapsed_sec", 0),
+                }
+                for e in plan_done_events[-10:]
+            ],
+        }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

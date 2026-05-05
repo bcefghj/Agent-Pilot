@@ -3,7 +3,7 @@
 Three back-ends, tried in order:
     1. Doubao ASR (if ``ARK_ASR_MODEL`` is configured)
     2. Feishu Minutes API (for pre-recorded meetings)
-    3. Offline stub – returns the raw file name so demos still progress.
+    3. Demo fallback – returns a description or stub so demos still progress.
 
 The tool signature is ``(audio_url=..., file_key=..., text=...)``. If the
 caller already has text (e.g. IM text message) it's returned as-is.
@@ -12,6 +12,7 @@ caller already has text (e.g. IM text message) it's returned as-is.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict
 
 logger = logging.getLogger("pilot.tool.voice")
@@ -25,10 +26,15 @@ def voice_transcribe(step, ctx: Dict[str, Any]) -> Dict[str, Any]:
 
     audio_url = args.get("audio_url") or ""
     file_key = args.get("file_key") or ""
+    file_path = args.get("file_path") or ""
 
-    text = _try_doubao(audio_url) or _try_feishu_minutes(file_key)
+    text = _try_doubao_asr(file_path or audio_url) or _try_feishu_minutes(file_key)
     if text:
         return {"text": text, "source": "asr"}
+
+    fallback = _demo_transcription_fallback(file_path)
+    if fallback:
+        return {"text": fallback, "source": "demo_fallback"}
 
     return {
         "text": "（离线演示：语音转写未启用，返回占位文本）把本周讨论做成 PPT 并生成评审链接。",
@@ -36,19 +42,41 @@ def voice_transcribe(step, ctx: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _try_doubao(audio_url: str) -> str:
-    if not audio_url:
+def _try_doubao_asr(file_path: str) -> str:
+    """Attempt ASR via Volcano Ark (OpenAI-compatible whisper endpoint)."""
+    if not file_path:
         return ""
     try:
-        import os
-
-        if not os.getenv("ARK_ASR_MODEL"):
+        from config import Config
+        if not Config.ARK_API_KEY:
             return ""
-        # Placeholder: the Doubao ASR HTTP call
-        return ""
+
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=Config.ARK_API_KEY,
+            base_url=Config.ARK_BASE_URL.replace("/coding/v3", "/v3"),
+        )
+
+        with open(file_path, "rb") as audio_file:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language="zh",
+            )
+        text = transcript.text if hasattr(transcript, "text") else str(transcript)
+        if text and len(text.strip()) > 1:
+            return text.strip()
     except Exception as e:
-        logger.debug("doubao asr skipped: %s", e)
+        logger.debug("doubao asr failed: %s", e)
+    return ""
+
+
+def _demo_transcription_fallback(file_path: str) -> str:
+    """Demo fallback: return a description of what was received."""
+    if not file_path or not os.path.exists(file_path):
         return ""
+    size_kb = os.path.getsize(file_path) / 1024
+    return f"[语音转文字] 收到 {size_kb:.0f}KB 音频文件，ASR 服务暂不可用，请以文字形式重新输入您的需求。"
 
 
 def _try_feishu_minutes(file_key: str) -> str:
@@ -65,7 +93,6 @@ def _try_feishu_minutes(file_key: str) -> str:
         r = fetch_minutes(file_key, need_speaker=True, need_timestamp=True) or {}
         if not r.get("ok"):
             return ""
-        # Prefer segmented speaker-tagged output when available.
         segs = r.get("segments") or []
         if segs:
             return "\n".join(

@@ -173,15 +173,31 @@ FEISHU_CLI_SKILLS: Dict[str, Dict[str, Any]] = {
         ],
     },
     "lark-slides": {
-        "description": "幻灯片",
+        "description": "幻灯片/演示稿",
         "commands": [
             "lark-cli slides create --title {title}",
+            "lark-cli slides get --presentation-id {presentation_id}",
+            "lark-cli slides add-slide --presentation-id {presentation_id} --layout {layout}",
+            "lark-cli slides delete-slide --presentation-id {presentation_id} --slide-id {slide_id}",
         ],
     },
     "lark-lingo": {
         "description": "词典",
         "commands": [
             "lark-cli lingo search --query {query}",
+        ],
+    },
+    "lark-okr": {
+        "description": "OKR 目标管理",
+        "commands": [
+            "lark-cli okr list --user-id {user_id}",
+            "lark-cli okr get --okr-id {okr_id}",
+        ],
+    },
+    "lark-event": {
+        "description": "实时事件订阅",
+        "commands": [
+            "lark-cli event subscribe --events {event_types}",
         ],
     },
 }

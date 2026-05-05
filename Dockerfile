@@ -1,4 +1,4 @@
-# Agent-Pilot v9 · Multi-stage production container
+# Agent-Pilot v11 · Multi-stage production container
 
 # Stage 1: Python dependencies
 FROM python:3.12-slim AS python-deps
@@ -13,7 +13,7 @@ RUN npm install -g @larksuite/cli 2>/dev/null || true
 # Stage 3: Production image
 FROM python:3.12-slim AS production
 LABEL maintainer="Agent-Pilot Team"
-LABEL version="9.0.0"
+LABEL version="11.0.0"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tini ca-certificates curl \

@@ -205,12 +205,25 @@ def _markdown_to_blocks(md: str) -> List[Any]:
 
 def _default_markdown_from_intent(ctx: Dict[str, Any]) -> str:
     plan_id = ctx.get("plan_id", "")
+    intent = ctx.get("description", "") or ctx.get("intent", "") or plan_id
     step_results: Dict[str, Dict[str, Any]] = ctx.get("step_results") or {}
+
     thread_msgs = []
     for sid, result in step_results.items():
         if "messages" in result:
             thread_msgs = result["messages"]
             break
+
+    context_block = ""
+    if thread_msgs:
+        context_block = "\n".join(
+            f"- {m.get('sender', '?')}: {m.get('text', '')[:100]}"
+            for m in thread_msgs[-8:]
+        )
+
+    llm_md = _generate_doc_via_llm(intent, context_block, plan_id)
+    if llm_md:
+        return llm_md
 
     lines = ["## 背景与目标", "", f"Agent-Pilot 计划 `{plan_id}` 自动生成的需求文档。", "", "## 上下文摘要"]
     if thread_msgs:
@@ -220,3 +233,37 @@ def _default_markdown_from_intent(ctx: Dict[str, Any]) -> str:
         lines.append("- 暂无群聊历史（离线 demo）")
     lines += ["", "## 下一步行动", "- [ ] 明确验收标准", "- [ ] 指派负责人", "- [ ] 5 月 7 日前交付初版"]
     return "\n".join(lines)
+
+
+def _generate_doc_via_llm(intent: str, context: str, plan_id: str) -> str:
+    try:
+        from llm.llm_client import chat
+    except ImportError:
+        return ""
+    try:
+        from config import Config
+        if not Config.ARK_API_KEY:
+            return ""
+    except Exception:
+        return ""
+
+    prompt = f"""你是一个专业文档撰写助手。请根据以下信息生成一份结构化的 Markdown 需求文档。
+
+用户意图：{intent}
+计划编号：{plan_id}
+
+{"对话上下文：" + chr(10) + context if context else "（无额外上下文）"}
+
+要求：
+1. 包含「背景与目标」「核心需求」「关键决策」「下一步行动」等章节
+2. 使用 Markdown 格式（## 标题、- 列表）
+3. 内容具体、可操作，300-500 字
+4. 直接输出 Markdown，不要包裹代码块"""
+
+    try:
+        result = chat(prompt, temperature=0.4)
+        if result and len(result.strip()) > 50:
+            return result.strip()
+    except Exception:
+        pass
+    return ""

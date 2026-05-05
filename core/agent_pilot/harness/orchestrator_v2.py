@@ -86,6 +86,12 @@ class OrchestratorState:
     finished: bool = False
     verdict: str = ""  # "ok" / "partial" / "failed"
     summary: str = ""
+    max_steps: int = 50
+    steps_executed: int = 0
+    total_timeout_sec: int = 1800
+    started_ts: int = 0
+    total_tokens_used: int = 0
+    cost_usd: float = 0.0
 
 
 class ConversationOrchestrator:
@@ -171,6 +177,7 @@ class ConversationOrchestrator:
     def run(self, plan: Plan, *, context: Optional[Dict[str, Any]] = None) -> Plan:
         """Execute a pre-built Plan through the 6-node loop."""
         state = OrchestratorState(plan=plan)
+        state.started_ts = int(time.time())
         ctx: Dict[str, Any] = dict(context or {})
         ctx.setdefault("plan_id", plan.plan_id)
         ctx.setdefault("user_open_id", plan.user_open_id)
@@ -180,6 +187,19 @@ class ConversationOrchestrator:
 
         self._gather(state, ctx)
         while not state.finished:
+            if state.steps_executed >= state.max_steps:
+                state.verdict = "failed"
+                state.summary = f"step budget exhausted ({state.max_steps})"
+                state.finished = True
+                self._emit("budget_exhausted", plan_id=plan.plan_id, payload={"max_steps": state.max_steps})
+                break
+            elapsed = int(time.time()) - state.started_ts
+            if elapsed > state.total_timeout_sec:
+                state.verdict = "failed"
+                state.summary = f"total timeout ({state.total_timeout_sec}s)"
+                state.finished = True
+                self._emit("timeout", plan_id=plan.plan_id, payload={"elapsed_sec": elapsed})
+                break
             self._dispatch(state, ctx)
             self._verify(state, ctx)
             self._reflect(state, ctx)
@@ -391,6 +411,7 @@ class ConversationOrchestrator:
                     step_id=step.step_id,
                     payload={"reason": perm.reason, "tool": step.tool, "args_keys": list(args.keys())},
                 )
+                self._send_confirm_card(plan, step, perm.reason)
                 skipped.append(step)
                 continue
 
@@ -437,6 +458,7 @@ class ConversationOrchestrator:
             return
 
         outcomes = self._executor.dispatch(invocations)
+        state.steps_executed += len(outcomes)
 
         # Apply outcomes back to plan.
         for outcome in outcomes:
@@ -557,7 +579,12 @@ class ConversationOrchestrator:
         )
         done = sum(1 for s in plan.steps if s.status == "done")
         failed = sum(1 for s in plan.steps if s.status == "failed")
-        summary = f"verdict={state.verdict} done={done}/{len(plan.steps)} failed={failed} replans={state.replans}"
+        elapsed = int(time.time()) - state.started_ts if state.started_ts else 0
+        summary = (
+            f"verdict={state.verdict} done={done}/{len(plan.steps)} failed={failed} "
+            f"replans={state.replans} steps_executed={state.steps_executed} elapsed={elapsed}s "
+            f"tokens={state.total_tokens_used}"
+        )
         state.summary = summary
 
         # Persist memory fact (last run summary).
@@ -580,8 +607,30 @@ class ConversationOrchestrator:
                 "failed": failed,
                 "replans": state.replans,
                 "summary": summary,
+                "steps_executed": state.steps_executed,
+                "elapsed_sec": elapsed,
+                "total_tokens": state.total_tokens_used,
+                "cost_usd": state.cost_usd,
             },
         )
+
+    def _send_confirm_card(self, plan: Plan, step: PlanStep, reason: str) -> None:
+        """Best-effort: send a Feishu card asking the user to approve this step."""
+        try:
+            from bot.cards_pilot import permission_confirm_card
+            from bot.message_sender import send_card
+
+            card = permission_confirm_card(
+                plan_id=plan.plan_id,
+                step_id=step.step_id,
+                tool=step.tool,
+                reason=reason,
+                description=step.description,
+            )
+            if plan.user_open_id:
+                send_card(plan.user_open_id, card)
+        except Exception as exc:
+            logger.debug("confirm card send failed: %s", exc)
 
     # ── Accessors ──
 

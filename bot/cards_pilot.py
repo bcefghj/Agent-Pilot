@@ -470,6 +470,111 @@ def task_clarify_card(
     return _envelope(_header("澄清任务意图", subtitle="PRD §5", template="orange"), body)
 
 
+# ── 8. 权限确认卡（Agent 需要用户批准写操作） ──────────────────────────────────
+
+
+def permission_confirm_card(
+    *,
+    plan_id: str,
+    step_id: str,
+    tool: str,
+    reason: str,
+    description: str = "",
+) -> Dict[str, Any]:
+    body: List[Dict[str, Any]] = [
+        _text(f"**🔒 Agent 需要您的授权**", eid="pilot.perm.header"),
+        _text(
+            f"工具：`{tool}`\n操作：{description or step_id}\n原因：{reason}",
+            eid="pilot.perm.detail",
+        ),
+        _divider(),
+        {
+            "tag": "action",
+            "actions": [
+                _button(
+                    "✅ 批准执行",
+                    action="pilot.perm.approve",
+                    value={"plan_id": plan_id, "step_id": step_id, "tool": tool},
+                    style="primary",
+                    eid="pilot.perm.btn.approve",
+                ),
+                _button(
+                    "⏭️ 本次全部批准",
+                    action="pilot.perm.approve_all",
+                    value={"plan_id": plan_id},
+                    eid="pilot.perm.btn.approve_all",
+                ),
+                _button(
+                    "❌ 拒绝",
+                    action="pilot.perm.deny",
+                    value={"plan_id": plan_id, "step_id": step_id},
+                    style="danger",
+                    eid="pilot.perm.btn.deny",
+                ),
+            ],
+            "element_id": "pilot.perm.actions",
+        },
+    ]
+    return _envelope(
+        _header("权限确认", subtitle=f"plan: {plan_id[-8:]}", template="orange"),
+        body,
+    )
+
+
+# ── 9. DAG 可视化卡（在 IM 中展示 Plan 进度） ──────────────────────────────────
+
+
+def dag_progress_card(
+    *,
+    plan_id: str,
+    intent: str,
+    steps: List[Dict[str, Any]],
+    verdict: str = "",
+    dashboard_url: str = "",
+) -> Dict[str, Any]:
+    status_icons = {"done": "✅", "running": "⏳", "failed": "❌", "pending": "⬜"}
+    done = sum(1 for s in steps if s.get("status") == "done")
+    total = len(steps)
+
+    body: List[Dict[str, Any]] = [
+        _text(f"**📋 任务编排进度** ({done}/{total})", eid="pilot.dag.header"),
+        _text(f"_「{intent[:120]}」_", eid="pilot.dag.intent"),
+        _divider(),
+    ]
+
+    steps_md_lines = []
+    for s in steps[:12]:
+        icon = status_icons.get(s.get("status", "pending"), "⬜")
+        tool = s.get("tool", "?")
+        desc = s.get("description", "")[:60]
+        steps_md_lines.append(f"{icon} `{tool}` {desc}")
+    body.append(_text("\n".join(steps_md_lines), eid="pilot.dag.steps"))
+
+    if verdict:
+        body.append(_divider())
+        body.append(_text(f"**结论**：{verdict}", eid="pilot.dag.verdict"))
+
+    actions = []
+    if dashboard_url:
+        actions.append(
+            _button("📊 打开驾驶舱", url=dashboard_url, style="primary", eid="pilot.dag.btn.dashboard")
+        )
+    actions.append(
+        _button(
+            "🔄 刷新",
+            action="pilot.dag.refresh",
+            value={"plan_id": plan_id},
+            eid="pilot.dag.btn.refresh",
+        )
+    )
+    body.append({"tag": "action", "actions": actions, "element_id": "pilot.dag.actions"})
+
+    return _envelope(
+        _header("Agent-Pilot DAG", subtitle=f"plan: {plan_id[-8:]}", template="blue"),
+        body,
+    )
+
+
 __all__ = [
     "task_suggested_card",
     "assign_picker_card",
@@ -478,4 +583,6 @@ __all__ = [
     "task_progress_card",
     "task_delivered_card",
     "task_clarify_card",
+    "permission_confirm_card",
+    "dag_progress_card",
 ]

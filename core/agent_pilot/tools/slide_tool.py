@@ -75,6 +75,8 @@ def slide_generate(step, ctx: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as e:
             logger.debug("slidev export skipped: %s", e)
 
+    feishu_result = _try_create_feishu_slides(title, outline)
+
     return {
         "slide_id": slide_id,
         "title": title,
@@ -83,6 +85,8 @@ def slide_generate(step, ctx: Dict[str, Any]) -> Dict[str, Any]:
         "pptx_url": pptx_url,
         "pdf_url": pdf_url,
         "outline": outline,
+        "feishu_presentation_id": feishu_result.get("presentation_id", ""),
+        "feishu_url": feishu_result.get("url", ""),
     }
 
 
@@ -115,11 +119,111 @@ def slide_rehearse(step, ctx: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ── Feishu Slides API integration ──
+
+
+def _try_create_feishu_slides(title: str, outline: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Attempt to create presentation via Feishu Slides API or CLI."""
+    result = _try_feishu_slides_cli(title)
+    if result:
+        return result
+    return {}
+
+
+def _try_feishu_slides_cli(title: str) -> Dict[str, Any]:
+    """Create a Feishu presentation via lark-cli slides command."""
+    try:
+        from core.feishu_cli.mcp_config import is_cli_available, run_cli_command
+
+        if not is_cli_available():
+            return {}
+        resp = run_cli_command(
+            "lark-cli slides create --title {title}",
+            {"title": title},
+        )
+        if resp.get("ok") and resp.get("stdout"):
+            import json as _json
+            try:
+                data = _json.loads(resp["stdout"])
+                pres_id = data.get("presentation_id") or data.get("id", "")
+                if pres_id:
+                    return {
+                        "presentation_id": pres_id,
+                        "url": f"https://bytedance.feishu.cn/slides/{pres_id}",
+                    }
+            except Exception:
+                pass
+    except Exception as e:
+        logger.debug("feishu slides CLI failed: %s", e)
+    return {}
+
+
 # ── Helpers ──
+
+
+def _generate_outline_via_llm(title: str, ctx: Dict[str, Any]) -> List[Dict[str, Any]]:
+    try:
+        from llm.llm_client import chat
+    except ImportError:
+        return []
+    if not title:
+        return []
+
+    step_results = ctx.get("step_results") or {}
+    doc_content = ""
+    for r in step_results.values():
+        if r.get("doc_token") and r.get("source"):
+            doc_content = f"已生成文档 {r.get('doc_token', '')}"
+            break
+
+    prompt = f"""你是一个演示稿设计助手。请为以下主题设计一份 6-8 页的 PPT 大纲。
+
+主题：{title}
+{"关联文档：" + doc_content if doc_content else ""}
+
+请以 JSON 数组格式输出，每个元素包含 title 和 bullets 字段：
+[
+  {{"title": "封面标题", "bullets": ["副标题", "作者"]}},
+  {{"title": "背景", "bullets": ["要点1", "要点2", "要点3"]}},
+  ...
+]
+
+要求：
+1. 6-8 页，逻辑清晰
+2. 每页 2-4 个要点
+3. 最后一页为感谢/联系方式
+4. 只输出 JSON 数组，不要其他内容"""
+
+    try:
+        from config import Config
+        if not Config.ARK_API_KEY:
+            return []
+        result = chat(prompt, temperature=0.4)
+        if result:
+            import json as _json
+            import re as _re
+            txt = result.strip()
+            if txt.startswith("```"):
+                m = _re.search(r"```(?:json)?\s*([\s\S]+?)```", txt)
+                if m:
+                    txt = m.group(1).strip()
+            arr = _json.loads(txt)
+            if isinstance(arr, list) and len(arr) >= 3:
+                return [
+                    {"title": str(p.get("title", f"Slide {i}")), "bullets": [str(b) for b in (p.get("bullets") or [])]}
+                    for i, p in enumerate(arr, 1)
+                ]
+    except Exception:
+        pass
+    return []
 
 
 def _default_outline_from_ctx(ctx: Dict[str, Any], title: str) -> List[Dict[str, Any]]:
     """Build a default 6-page outline using prior doc/canvas step results if available."""
+    llm_outline = _generate_outline_via_llm(title, ctx)
+    if llm_outline:
+        return llm_outline
+
     plan_id = ctx.get("plan_id", "")
     step_results: Dict[str, Dict[str, Any]] = ctx.get("step_results") or {}
     doc_url = ""
@@ -251,11 +355,46 @@ def _parse_slidev_md(path: str) -> List[Dict[str, Any]]:
 def _speaker_note_for_page(page: Dict[str, Any]) -> str:
     title = page.get("title", "")
     bullets = page.get("bullets", [])
-    # Keep local/offline deterministic; the LLM version can be wired later
     if not title:
         return ""
+
+    note = _generate_speaker_note_via_llm(title, bullets)
+    if note:
+        return note
+
     prefix = f"本页主题是「{title}」。"
     if not bullets:
         return prefix
     body = "要点有：" + "；".join(bullets[:3])
     return prefix + body + "。演示时请用自己的语言讲 40-60 秒。"
+
+
+def _generate_speaker_note_via_llm(title: str, bullets: List[str]) -> str:
+    try:
+        from llm.llm_client import chat
+    except ImportError:
+        return ""
+
+    try:
+        from config import Config
+        if not Config.ARK_API_KEY:
+            return ""
+    except Exception:
+        return ""
+
+    bullets_text = "\n".join(f"- {b}" for b in bullets[:5]) if bullets else "（无要点）"
+    prompt = f"""为演示稿的一页生成简短的演讲稿（60-90字），语气自然专业。
+
+页面标题：{title}
+页面要点：
+{bullets_text}
+
+要求：直接输出演讲稿文本，不要标题或格式标记。"""
+
+    try:
+        result = chat(prompt, temperature=0.5)
+        if result and len(result.strip()) > 20:
+            return result.strip()
+    except Exception:
+        pass
+    return ""

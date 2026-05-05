@@ -71,21 +71,39 @@ def _wrap_user_input(prompt: str) -> str:
 def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = OpenAI(
-            api_key=Config.ARK_API_KEY,
-            base_url=Config.ARK_BASE_URL,
-        )
+        api_key, base_url = _select_provider()
+        _client = OpenAI(api_key=api_key, base_url=base_url)
     return _client
 
 
 def _get_async_client() -> AsyncOpenAI:
     global _async_client
     if _async_client is None:
-        _async_client = AsyncOpenAI(
-            api_key=Config.ARK_API_KEY,
-            base_url=Config.ARK_BASE_URL,
-        )
+        api_key, base_url = _select_provider()
+        _async_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
     return _async_client
+
+
+def _select_provider() -> tuple:
+    """Select the best available LLM provider. Priority: MiMo > ARK > MiniMax."""
+    if getattr(Config, "MIMO_API_KEY", ""):
+        return Config.MIMO_API_KEY, getattr(Config, "MIMO_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1")
+    if Config.ARK_API_KEY:
+        return Config.ARK_API_KEY, Config.ARK_BASE_URL
+    if getattr(Config, "MINIMAX_API_KEY", ""):
+        return Config.MINIMAX_API_KEY, getattr(Config, "MINIMAX_BASE_URL", "https://api.minimax.chat/v1")
+    return "", ""
+
+
+def get_active_model() -> str:
+    """Return the model name for the active provider."""
+    if getattr(Config, "MIMO_API_KEY", ""):
+        return getattr(Config, "MIMO_MODEL", "mimo-v2.5-pro")
+    if Config.ARK_API_KEY:
+        return Config.ARK_MODEL
+    if getattr(Config, "MINIMAX_API_KEY", ""):
+        return getattr(Config, "MINIMAX_MODEL", "MiniMax-M2.7")
+    return "doubao-seed-2.0-pro"
 
 
 def _build_system_prompt(
@@ -163,7 +181,7 @@ def chat(
         for attempt in range(_LLM_MAX_RETRY + 1):
             try:
                 resp = client.chat.completions.create(
-                    model=Config.ARK_MODEL,
+                    model=get_active_model(),
                     messages=messages,
                     temperature=temperature,
                     max_tokens=_LLM_MAX_TOKENS,
@@ -225,7 +243,7 @@ def chat_with_tools(
         for attempt in range(_LLM_MAX_RETRY + 1):
             try:
                 resp = client.chat.completions.create(
-                    model=Config.ARK_MODEL,
+                    model=get_active_model(),
                     messages=built_messages,
                     tools=tools,
                     temperature=temperature,
@@ -344,7 +362,7 @@ async def async_chat(
         for attempt in range(_LLM_MAX_RETRY + 1):
             try:
                 resp = await client.chat.completions.create(
-                    model=Config.ARK_MODEL,
+                    model=get_active_model(),
                     messages=messages,
                     temperature=temperature,
                     max_tokens=_LLM_MAX_TOKENS,
@@ -407,7 +425,7 @@ async def async_chat_with_tools(
         for attempt in range(_LLM_MAX_RETRY + 1):
             try:
                 resp = await client.chat.completions.create(
-                    model=Config.ARK_MODEL,
+                    model=get_active_model(),
                     messages=built_messages,
                     tools=tools,
                     temperature=temperature,

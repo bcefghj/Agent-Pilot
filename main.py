@@ -159,10 +159,10 @@ def main():
     signal.signal(signal.SIGINT, _graceful_shutdown)
 
     dashboard_port = int(os.getenv("DASHBOARD_PORT", "8001") or "8001")
-    sync_port = int(os.getenv("SYNC_HUB_PORT", "8767") or "8767")
+    sync_port = int(os.getenv("SYNC_HUB_PORT", "8002") or "8002")
     print(r"""
     ╔══════════════════════════════════════════════════════════╗
-    ║  Agent-Pilot · 三线产品 · 飞书 AI 校园挑战赛              ║
+    ║  Agent-Pilot v11 · 三线产品 · 飞书 AI 校园挑战赛          ║
     ║  从 IM 对话到演示稿的一键智能闭环                          ║
     ║                                                          ║
     ║  [✓] @pilot   主驾驶 · IntentDetector + ContextPack +     ║

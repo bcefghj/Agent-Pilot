@@ -14,6 +14,8 @@ from pydantic_settings import BaseSettings
 
 load_dotenv()
 
+VERSION = "11.0.0"
+
 
 class Settings(BaseSettings):
     """Validated application settings. Missing required fields cause startup failure."""
@@ -33,8 +35,15 @@ class Settings(BaseSettings):
     # ── Multi-provider LLM Keys (optional) ──
     DOUBAO_API_KEY: str = ""
     MINIMAX_API_KEY: str = ""
+    MINIMAX_BASE_URL: str = "https://api.minimax.chat/v1"
+    MINIMAX_MODEL: str = "MiniMax-M2.7"
     DEEPSEEK_API_KEY: str = ""
     KIMI_API_KEY: str = ""
+
+    # ── MiMo API (小米，主力模型) ──
+    MIMO_API_KEY: str = Field(default="", description="小米 MiMo API Key")
+    MIMO_BASE_URL: str = "https://token-plan-cn.xiaomimimo.com/v1"
+    MIMO_MODEL: str = "mimo-v2.5-pro"
 
     # ── Mentor ──
     MENTOR_PROACTIVE_COOLDOWN_SEC: int = 300

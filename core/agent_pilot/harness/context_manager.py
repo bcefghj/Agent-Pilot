@@ -212,15 +212,23 @@ class ContextManager:
     def _layer4_autocompact(self, messages: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], int]:
         """Nuclear compaction. 9-section structured summary.
 
-        Extracts: user intent / decisions / files touched / errors /
-        pending tasks / next step / recent files / todos.
+        Tries LLM summarization first; falls back to keyword extraction.
         """
-        # Run L3 first.
         messages, dropped = self._layer3_collapse(messages)
 
         first_user = next((m for m in messages if m.get("role") == "user"), None)
         recent_tail = messages[-8:]
 
+        # Try LLM-based structured summary
+        llm_summary = self._llm_summarize(messages, first_user)
+        if llm_summary:
+            rewritten = [
+                {"role": "system", "content": llm_summary},
+            ] + recent_tail
+            dropped += max(0, len(messages) - len(rewritten))
+            return rewritten, dropped
+
+        # Fallback: keyword extraction
         sections = {
             "1. user_intent": (first_user or {}).get("content", "") if first_user else "",
             "2. decisions": _extract_lines(messages, ["决定", "决策", "decided", "will use"]),
@@ -240,6 +248,64 @@ class ContextManager:
         ] + recent_tail
         dropped += max(0, len(messages) - len(rewritten))
         return rewritten, dropped
+
+    def _llm_summarize(self, messages: List[Dict[str, Any]], first_user: Optional[Dict[str, Any]]) -> str:
+        """Use LLM to create a structured session summary. Returns empty on failure."""
+        try:
+            from llm.llm_client import chat
+        except ImportError:
+            return ""
+        try:
+            from config import Config
+            if not Config.ARK_API_KEY:
+                return ""
+        except Exception:
+            return ""
+
+        user_intent = (first_user or {}).get("content", "")[:300]
+        msg_digest = []
+        for m in messages[-20:]:
+            role = m.get("role", "?")
+            content = str(m.get("content", "") or "")[:150]
+            if content:
+                msg_digest.append(f"[{role}] {content}")
+        digest_text = "\n".join(msg_digest[-15:])
+
+        prompt = f"""请将以下对话历史压缩为结构化摘要（Markdown格式），保留关键信息。
+
+用户原始意图：{user_intent}
+
+对话片段：
+{digest_text}
+
+请按以下结构输出：
+## 会话摘要（L4 Autocompact）
+### 1. 用户意图
+（一句话）
+### 2. 关键决策
+（bullet list）
+### 3. 已完成操作
+（bullet list）
+### 4. 错误与修复
+（bullet list 或 "无"）
+### 5. 待办事项
+（bullet list 或 "无"）
+### 6. 下一步
+（一句话建议）
+
+直接输出 Markdown，不要代码块包裹。"""
+
+        try:
+            result = chat(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=800,
+            )
+            if result and len(result.strip()) > 50 and "##" in result:
+                return result.strip()
+        except Exception as e:
+            logger.debug("L4 LLM summarize failed: %s", e)
+        return ""
 
     # ── Helpers ──
 

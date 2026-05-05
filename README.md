@@ -5,7 +5,7 @@
 [![CI](https://github.com/bcefghj/Agent-Pilot/actions/workflows/ci.yml/badge.svg)](https://github.com/bcefghj/Agent-Pilot/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v10.0.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-v11.0.0-orange.svg)]()
 
 ---
 
@@ -111,12 +111,17 @@ cp .env.example .env
 # 4. 验证环境（可选）
 PYTHONPATH=. pytest tests/ -q --ignore=tests/e2e --ignore=tests/simulator
 
-# 5. 启动服务
-python main.py
+# 5. 启动全部服务（推荐）
+bash run_services.sh
+# 一次性启动 3 个进程：Bot + Dashboard + MCP Server
 # Dashboard:    http://localhost:8001
-# 健康检查:     http://localhost:8001/health
-# Pilot 驾驶舱: http://localhost:8001/v7/pilot
+# Pilot 驾驶舱: http://localhost:8001/v11/dashboard
+# DAG 可视化:   http://localhost:8001/v11/dag/{plan_id}
 # API 文档:     http://localhost:8001/docs
+# MCP Server:   http://localhost:8767
+
+# 仅启动飞书 Bot（不含 Dashboard 和同步服务）
+# python main.py
 
 # 6. 在飞书中体验
 # 私聊 Bot 发送：/pilot 把本周讨论整理成产品方案 + 评审PPT
@@ -150,7 +155,7 @@ Agent-Pilot/
 │
 ├── bot/                        # 飞书 Bot 接口层
 │   ├── event_handler.py        #   消息事件分发 + 卡片回调
-│   ├── cards_pilot.py          #   7 张 Pilot 交互卡片
+│   ├── cards_pilot.py          #   9 张 Pilot 交互卡片（含权限确认 + DAG 可视化）
 │   └── pilot_router.py         #   IM → 状态机路由
 │
 ├── core/agent_pilot/           # Pilot 编排核心
@@ -163,6 +168,7 @@ Agent-Pilot/
 ├── core/flow_memory/           # 6 级 Memory 引擎
 ├── core/sync/                  # Yjs CRDT 多端同步
 ├── core/mentor/                # Mentor 表达带教（4 Skills）
+├── core/feishu_cli/             # 飞书 CLI 24 Skills 集成（200+ 命令）
 ├── core/mcp_server/            # MCP 协议 Server（21 工具）
 │
 ├── llm/                        # LLM 调用层（OpenAI 兼容）
@@ -186,7 +192,7 @@ Agent-Pilot/
 | A - 意图入口 | 飞书 IM 文本/语音，主动识别任务 | `intent_detector.py` · `voice_tool.py` | 自然对话 / `/pilot <意图>` |
 | B - 任务规划 | DAG 拆解，自动澄清缺失信息 | `planner.py` · `context_service.py` | 三闸门通过后自动触发 |
 | C - 文档与白板 | 飞书 Docx API + tldraw 画板双写 | `doc_tool.py` · `canvas_tool.py` | 规划节点自动执行 |
-| D - 演示稿生成 | Slidev Markdown → PPTX + 演讲稿 | `slide_tool.py` | 规划节点自动执行 |
+| D - 演示稿生成 | LLM 生成大纲 → Slidev/飞书 Slides → PPTX + 演讲稿 | `slide_tool.py` | 规划节点自动执行 |
 | E - 多端同步 | Yjs CRDT Hub，四端实时广播 | `crdt_hub.py` · `ws_server.py` | 任意端修改自动同步 |
 | F - 归档交付 | Manifest 汇总 + 飞书摘要 + 分享页 | `archive_tool.py` | 全部节点完成后触发 |
 
@@ -204,9 +210,11 @@ Agent-Pilot/
 | `/api/context` | GET | 5 层压缩 + 4 层记忆 + 7 层安全快照 |
 | `/api/skills` | GET | 22 官方 + N 自动生成技能列表 |
 | `/api/quality/{plan_id}` | GET | 5 Quality Gates 评分详情 |
+| `/api/pilot/trace/{plan_id}` | GET | 执行追踪：步骤级耗时/Token/重试详情 |
+| `/api/pilot/cost` | GET | 成本汇总：Token 总量与费用统计 |
 | `/sync/ws` | WebSocket | Yjs CRDT 多端同步通道 |
-| `/v7/pilot` | GET | Pilot 驾驶舱 Web 页面 |
-| `/v7/memory` | GET | 6 级 Memory 可视化页面 |
+| `/v11/dashboard` | GET | Pilot v11 驾驶舱主入口 |
+| `/v11/dag/{plan_id}` | GET | DAG 可视化（步骤详情 + 实时日志流） |
 | `/docs` | GET | OpenAPI 自动生成文档 |
 
 完整 API 文档启动后访问 `http://localhost:8001/docs` 查看。
@@ -221,7 +229,7 @@ Agent-Pilot/
 | Promptfoo 红队 | 32/32 通过（OWASP LLM Top 10） |
 | A/B 真实 LLM 调用 | 5 配置 × 3 模型 × 5 任务 = 75 次 |
 | 飞书 API 接入 | 7+（IM / Docx / Bitable / Calendar / Wiki / 妙记 / Reaction） |
-| MCP 工具 | 21 内建 + 24 飞书 CLI Skills |
+| MCP 工具 | 21 内建 + 24 飞书 CLI Skills（200+ 命令） |
 | 安全栈层数 | 8 层全链路必经 |
 | 部署成本 | 2C2G 起步 |
 
@@ -233,7 +241,7 @@ Agent-Pilot/
 
 - 赛题核心要求：从一次 IM 对话开始，Agent 自动串联 IM + 文档 + 演示稿/画布，实现多端实时同步的全链路自动化
 - 在线体验：http://118.178.242.26/
-- Pilot 驾驶舱：http://118.178.242.26/v7/pilot
+- Pilot 驾驶舱：http://118.178.242.26/v11/dashboard
 - 技术文档：[架构文档](docs/ARCHITECTURE_v8.md) · [PRD 实现地图](docs/PRD_IMPLEMENTATION.md) · [演化历程](docs/EVOLUTION.md) · [Demo 脚本](docs/DEMO_SCRIPT.md)
 
 | 成员 | 角色 | 联系 |

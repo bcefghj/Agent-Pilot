@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch all 3 Agent-Pilot v8 services in background.
+# Launch all 3 Agent-Pilot v11 services in background.
 # In production systemd replaces this; this script is for local dev.
 
 set -e
@@ -27,6 +27,7 @@ echo "  - Dashboard     http://localhost:8001/"
 echo "  - Pilot UI      http://localhost:8001/dashboard/pilot"
 echo "  - Sync WS       ws://localhost:8001/sync/ws"
 echo "  - Pilot API     http://localhost:8001/api/pilot/plans"
+echo "  - API docs       http://localhost:8001/docs"
 echo "  - MCP HTTP      http://localhost:8767/"
 echo ""
 echo "Tail logs with:  tail -f logs/*.log"
