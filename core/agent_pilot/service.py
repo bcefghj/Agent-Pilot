@@ -103,16 +103,25 @@ def launch(intent: str, *, user_open_id: str = "", meta: Optional[Dict[str, Any]
 
 
 def _run_and_persist(plan: Plan) -> None:
+    start_ts = time.time()
     try:
         orch = get_orchestrator()
         ctx = {
             "plan_id": plan.plan_id,
             "user_open_id": plan.user_open_id,
+            "auto_confirm": True,
         }
         ctx.update(plan.meta or {})
         orch.run(plan, context=ctx)
+        duration_ms = int((time.time() - start_ts) * 1000)
+        logger.info("plan %s completed in %dms, steps: %d done / %d total",
+                    plan.plan_id, duration_ms,
+                    sum(1 for s in plan.steps if s.status == "done"),
+                    len(plan.steps))
     except Exception as e:
-        logger.exception("pilot run failed plan=%s: %s", plan.plan_id, e)
+        duration_ms = int((time.time() - start_ts) * 1000)
+        logger.exception("pilot run failed plan=%s after %dms: %s",
+                         plan.plan_id, duration_ms, e)
         try:
             from core.resilience import notify_user_error
             notify_user_error(
@@ -124,6 +133,13 @@ def _run_and_persist(plan: Plan) -> None:
             pass
     finally:
         _persist(plan, phase="finished")
+        try:
+            from core.observability import incr
+            done = sum(1 for s in plan.steps if s.status == "done")
+            failed = sum(1 for s in plan.steps if s.status == "failed")
+            incr("plan_finished", verdict="ok" if failed == 0 else "partial" if done > 0 else "failed")
+        except Exception:
+            pass
 
 
 def _persist(plan: Plan, *, phase: str) -> None:

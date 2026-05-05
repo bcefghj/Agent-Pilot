@@ -1,6 +1,6 @@
 [project]
 name = "agent-pilot"
-version = "7.1.0"
+version = "7.2.0"
 description = "Agent-Pilot: AI-driven office automation from IM to presentations"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -8,38 +8,66 @@ authors = [
     {name = "戴尚好", email = "bcefghj@163.com"},
     {name = "李洁盈", email = "JieyingLiii@outlook.com"},
 ]
+keywords = ["ai-agent", "feishu", "lark", "office-automation", "multi-agent", "crdt"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Office/Business",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 
 [tool.ruff]
 target-version = "py310"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I"]
-ignore = ["E501"]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "TCH", "RUF"]
+ignore = ["E501", "B008", "RUF012"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["core", "agent", "bot", "llm", "memory", "dashboard"]
+known-first-party = ["core", "agent", "bot", "llm", "memory", "dashboard", "utils"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "SIM"]
 
 [tool.mypy]
 python_version = "3.10"
 ignore_missing_imports = true
 no_strict_optional = true
 warn_unused_configs = true
+warn_return_any = true
+warn_redundant_casts = true
+disallow_untyped_defs = false
 exclude = ["tests/", "mobile_desktop/", "sync_v4/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --tb=short --timeout=60"
+addopts = "-v --tb=short --timeout=60 -x"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks integration tests requiring external services",
     "e2e: end-to-end tests",
+    "unit: fast unit tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
 ]
 
 [tool.coverage.run]
 source = ["core", "agent", "bot"]
-omit = ["tests/*", "*/__pycache__/*"]
+omit = ["tests/*", "*/__pycache__/*", "*/legacy/*"]
+branch = true
 
 [tool.coverage.report]
 fail_under = 60
 show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+    "pass",
+    "raise NotImplementedError",
+]

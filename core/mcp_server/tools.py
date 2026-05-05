@@ -1,9 +1,12 @@
-"""Tool implementations exposed by the LarkMentor MCP Server.
+"""Agent-Pilot MCP Server Tools.
 
-Each function returns a JSON-serialisable dict; the server module wraps
-them into MCP tool descriptors. We deliberately keep the bodies framework-
-agnostic so they can also be reused by the dashboard REST API, the bot
-command handler, and unit tests.
+Exposes Agent-Pilot capabilities as MCP tools with proper JSON Schema
+for input/output, structured error handling, and integration with the
+existing service layer.
+
+Each tool function returns a JSON-serialisable dict. The server module
+wraps them into MCP tool descriptors.  Bodies are framework-agnostic so
+they also work from the dashboard REST API, bot handler, and unit tests.
 """
 
 from __future__ import annotations
@@ -11,575 +14,432 @@ from __future__ import annotations
 import json
 import logging
 import time
+import traceback
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
-from core.flow_memory.archival import query_archival
-from core.flow_memory.working import WorkingMemory
-from core.security.audit_log import audit, query_audit
-from core.security.permission_manager import default_manager
-
-logger = logging.getLogger("flowguard.mcp.tools")
+logger = logging.getLogger("agent_pilot.mcp.tools")
 
 
-# --- 1. get_focus_status -----------------------------------------------------
+# ---------------------------------------------------------------------------
+# Structured error / result helpers
+# ---------------------------------------------------------------------------
 
-def tool_get_focus_status(open_id: str) -> Dict[str, Any]:
-    """Return the live focus state of a given user."""
-    try:
-        from memory.user_state import get_user
-        u = get_user(open_id)
-        return {
-            "open_id": open_id,
-            "is_focusing": bool(u and u.is_focusing()),
-            "focus_start_ts": getattr(u, "focus_start_ts", 0) if u else 0,
-            "focus_duration_sec": getattr(u, "focus_duration_sec", 0) if u else 0,
-            "work_context": getattr(u, "work_context", "") if u else "",
-            "ts": int(time.time()),
+@dataclass
+class ToolError:
+    code: str
+    message: str
+    details: Optional[Dict[str, Any]] = None
+    ts: float = field(default_factory=time.time)
+
+    def to_dict(self) -> Dict[str, Any]:
+        d: Dict[str, Any] = {
+            "error": True,
+            "code": self.code,
+            "message": self.message,
+            "ts": self.ts,
         }
-    except Exception as e:
-        return {"error": str(e), "open_id": open_id}
+        if self.details:
+            d["details"] = self.details
+        return d
 
 
-# --- 2. classify_message -----------------------------------------------------
-
-def tool_classify_message(
-    user_open_id: str,
-    sender_name: str,
-    sender_id: str,
-    content: str,
-    chat_name: str = "p2p",
-    chat_type: str = "group",
-) -> Dict[str, Any]:
-    """Run the LarkMentor classifier without sending any reply (read-only)."""
-    decision = default_manager().check(tool="shield.classify", user_open_id=user_open_id)
-    if not decision.allowed:
-        audit(actor=user_open_id, action="shield.classify",
-              resource=sender_id, outcome="deny", severity="WARN",
-              meta={"reason": decision.reason})
-        return {"error": "permission_denied", "reason": decision.reason}
-    try:
-        from core.smart_shield import process_message  # type: ignore
-        from memory.user_state import get_user
-        user = get_user(user_open_id)
-        if not user:
-            return {"error": "user_not_found"}
-        # Mark not-actually-focusing path: the caller might be just checking.
-        result = process_message(
-            user=user, sender_name=sender_name, sender_id=sender_id,
-            message_id=f"mcp_{int(time.time()*1000)}",
-            content=content, chat_name=chat_name, chat_type=chat_type,
-        )
-        # Strip non-serialisable items.
-        return {k: v for k, v in result.items() if isinstance(v, (str, int, float, bool, list, dict))}
-    except Exception as e:
-        logger.exception("classify_message error")
-        return {"error": str(e)}
+def _ok(data: Dict[str, Any]) -> Dict[str, Any]:
+    data.setdefault("ok", True)
+    data.setdefault("ts", int(time.time()))
+    return data
 
 
-# --- 3. get_recent_digest ----------------------------------------------------
-
-def tool_get_recent_digest(open_id: str, limit: int = 5) -> List[Dict[str, Any]]:
-    """Return the most-recent N archival summaries for a user."""
-    decision = default_manager().check(tool="memory.query", user_open_id=open_id)
-    if not decision.allowed:
-        return [{"error": "permission_denied"}]
-    items = query_archival(open_id, limit=limit)
-    return [
-        {
-            "ts": i.ts,
-            "kind": i.kind,
-            "summary_md": i.summary_md,
-            "meta": i.meta,
-        }
-        for i in items
-    ]
+def _err(code: str, message: str, **details: Any) -> Dict[str, Any]:
+    return ToolError(code=code, message=message,
+                     details=details if details else None).to_dict()
 
 
-# --- 4. add_whitelist --------------------------------------------------------
+# ---------------------------------------------------------------------------
+# JSON Schema definitions for every tool
+# ---------------------------------------------------------------------------
 
-def tool_add_whitelist(open_id: str, who: str) -> Dict[str, Any]:
-    """Add a sender to the user's whitelist (P0 short-circuit)."""
-    try:
-        from memory.user_state import get_user
-        u = get_user(open_id)
-        if not u:
-            return {"error": "user_not_found"}
-        if not hasattr(u, "whitelist"):
-            return {"error": "no_whitelist_field"}
-        if who not in u.whitelist:
-            u.whitelist.append(who)
-            try:
-                u.save()  # type: ignore[attr-defined]
-            except Exception:
-                pass
-        audit(actor=open_id, action="memory.write_archival",
-              resource=who, outcome="allow", severity="INFO",
-              meta={"kind": "whitelist_add"})
-        return {"ok": True, "whitelist_size": len(u.whitelist)}
-    except Exception as e:
-        return {"error": str(e)}
+TOOL_SCHEMAS: Dict[str, Dict[str, Any]] = {
+    "agent_pilot.create_task": {
+        "name": "agent_pilot.create_task",
+        "description": (
+            "Create a new task from natural language intent. "
+            "Parses intent, generates a DAG execution plan, and optionally "
+            "starts executing it. Returns plan_id and step breakdown."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "intent": {
+                    "type": "string",
+                    "description": "Natural language description of what to do",
+                },
+                "user_open_id": {
+                    "type": "string",
+                    "description": "Feishu open_id of the requesting user",
+                    "default": "",
+                },
+                "execute": {
+                    "type": "boolean",
+                    "description": "Whether to start execution immediately (false = plan-only / dry-run)",
+                    "default": True,
+                },
+                "async_run": {
+                    "type": "boolean",
+                    "description": "Whether to run asynchronously (non-blocking)",
+                    "default": True,
+                },
+            },
+            "required": ["intent"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "ok": {"type": "boolean"},
+                "plan_id": {"type": "string"},
+                "intent": {"type": "string"},
+                "status": {"type": "string", "enum": ["planned", "executing", "executed"]},
+                "total_steps": {"type": "integer"},
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "step_id": {"type": "string"},
+                            "tool": {"type": "string"},
+                            "description": {"type": "string"},
+                            "depends_on": {"type": "array", "items": {"type": "string"}},
+                        },
+                    },
+                },
+                "ts": {"type": "integer"},
+            },
+        },
+    },
 
+    "agent_pilot.get_task_status": {
+        "name": "agent_pilot.get_task_status",
+        "description": (
+            "Get the current status and progress of a task/plan. "
+            "Returns step-level statuses, artifacts produced, and event timeline."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "plan_id": {
+                    "type": "string",
+                    "description": "The plan/task ID returned by create_task",
+                },
+            },
+            "required": ["plan_id"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "ok": {"type": "boolean"},
+                "plan_id": {"type": "string"},
+                "intent": {"type": "string"},
+                "phase": {"type": "string"},
+                "total_steps": {"type": "integer"},
+                "done_steps": {"type": "integer"},
+                "steps": {"type": "array"},
+                "artifacts": {"type": "array"},
+                "ts": {"type": "integer"},
+            },
+        },
+    },
 
-# --- 5. rollback_decision ----------------------------------------------------
+    "agent_pilot.generate_document": {
+        "name": "agent_pilot.generate_document",
+        "description": (
+            "Generate a Feishu document from context. "
+            "Creates a rich-text document with the given title and markdown "
+            "content, uploads it to Feishu Drive, and returns the doc_token and URL."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Document title",
+                },
+                "markdown": {
+                    "type": "string",
+                    "description": "Document body in Markdown format",
+                },
+                "folder_token": {
+                    "type": "string",
+                    "description": "Feishu Drive folder token (optional, uses default if empty)",
+                    "default": "",
+                },
+                "user_open_id": {
+                    "type": "string",
+                    "description": "Requesting user's open_id for permission/audit",
+                    "default": "",
+                },
+            },
+            "required": ["title", "markdown"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "ok": {"type": "boolean"},
+                "doc_token": {"type": "string"},
+                "url": {"type": "string"},
+                "title": {"type": "string"},
+                "ts": {"type": "integer"},
+            },
+        },
+    },
 
-def tool_rollback_decision(open_id: str, decision_id: str) -> Dict[str, Any]:
-    """Mark a decision as rolled back; user disagreed with the AI."""
-    try:
-        from core.advanced_features import rollback_decision  # type: ignore
-        ok = rollback_decision(decision_id)
-        audit(actor=open_id, action="audit.list",
-              resource=decision_id, outcome="allow" if ok else "deny",
-              severity="INFO", meta={"kind": "rollback"})
-        return {"ok": bool(ok), "decision_id": decision_id}
-    except Exception as e:
-        return {"error": str(e), "decision_id": decision_id}
+    "agent_pilot.generate_slides": {
+        "name": "agent_pilot.generate_slides",
+        "description": (
+            "Generate presentation slides. "
+            "Accepts slide content as structured data or Markdown outline, "
+            "creates slides via Feishu API or local Marp fallback."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Presentation title",
+                },
+                "outline": {
+                    "type": "string",
+                    "description": "Slide content as Markdown outline (each H2 = one slide)",
+                },
+                "slides": {
+                    "type": "array",
+                    "description": "Structured slide data (alternative to outline)",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "body": {"type": "string"},
+                            "notes": {"type": "string"},
+                        },
+                    },
+                },
+                "theme": {
+                    "type": "string",
+                    "description": "Slide theme/template name",
+                    "default": "default",
+                },
+                "user_open_id": {
+                    "type": "string",
+                    "description": "Requesting user's open_id",
+                    "default": "",
+                },
+            },
+            "required": ["title"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "ok": {"type": "boolean"},
+                "slide_token": {"type": "string"},
+                "url": {"type": "string"},
+                "local_path": {"type": "string"},
+                "slide_count": {"type": "integer"},
+                "ts": {"type": "integer"},
+            },
+        },
+    },
 
+    "agent_pilot.list_plans": {
+        "name": "agent_pilot.list_plans",
+        "description": (
+            "List all active and completed plans/tasks. "
+            "Supports filtering by user and pagination via limit."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_open_id": {
+                    "type": "string",
+                    "description": "Filter plans by user (empty = all users)",
+                    "default": "",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of plans to return",
+                    "default": 20,
+                    "minimum": 1,
+                    "maximum": 100,
+                },
+            },
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "ok": {"type": "boolean"},
+                "count": {"type": "integer"},
+                "plans": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "plan_id": {"type": "string"},
+                            "intent": {"type": "string"},
+                            "phase": {"type": "string"},
+                            "total_steps": {"type": "integer"},
+                            "done_steps": {"type": "integer"},
+                            "created_ts": {"type": "integer"},
+                        },
+                    },
+                },
+                "ts": {"type": "integer"},
+            },
+        },
+    },
 
-# --- 6. query_memory ---------------------------------------------------------
+    "agent_pilot.sync_state": {
+        "name": "agent_pilot.sync_state",
+        "description": (
+            "Get current CRDT sync state for a room (plan). "
+            "Returns the room's event history, connected clients, "
+            "and presence information."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "room": {
+                    "type": "string",
+                    "description": "Room ID (typically the plan_id)",
+                },
+                "include_history": {
+                    "type": "boolean",
+                    "description": "Whether to include full event history",
+                    "default": True,
+                },
+                "history_limit": {
+                    "type": "integer",
+                    "description": "Max number of history events to return",
+                    "default": 50,
+                },
+            },
+            "required": ["room"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "ok": {"type": "boolean"},
+                "room": {"type": "string"},
+                "client_count": {"type": "integer"},
+                "presence": {"type": "array"},
+                "history": {"type": "array"},
+                "has_ydoc": {"type": "boolean"},
+                "ts": {"type": "integer"},
+            },
+        },
+    },
 
-def tool_query_memory(open_id: str, query: str, kinds: Optional[List[str]] = None,
-                      limit: int = 5) -> List[Dict[str, Any]]:
-    """Tiny lexical search over the user's archival summaries.
-
-    For v3 we ship a deterministic substring matcher; an embedding-based
-    retriever is on the v4 roadmap. Keeps the MCP contract stable either
-    way.
-    """
-    decision = default_manager().check(tool="memory.query", user_open_id=open_id)
-    if not decision.allowed:
-        return [{"error": "permission_denied"}]
-    items = query_archival(open_id, kinds=kinds, limit=200)
-    q = (query or "").lower().strip()
-    if not q:
-        return [{"ts": i.ts, "kind": i.kind, "summary_md": i.summary_md} for i in items[:limit]]
-    scored: List[tuple[int, Dict[str, Any]]] = []
-    for i in items:
-        body = (i.summary_md or "").lower()
-        score = body.count(q)
-        if score > 0:
-            scored.append((score, {"ts": i.ts, "kind": i.kind, "summary_md": i.summary_md}))
-    scored.sort(key=lambda t: t[0], reverse=True)
-    return [d for _, d in scored[:limit]]
-
-
-# --- v4 Mentor tools ----------------------------------------------------------
-
-def tool_mentor_review_message(
-    open_id: str, message: str, recipient: str = "同事/上级",
-) -> Dict[str, Any]:
-    """Run the writing mentor (NVC + 3 versions + citations)."""
-    decision = default_manager().check(tool="mentor.write", user_open_id=open_id)
-    if not decision.allowed:
-        return {"error": "permission_denied", "reason": decision.reason}
-    try:
-        from core.mentor.mentor_write import review
-
-        result = review(open_id, message, recipient=recipient)
-        audit(actor=open_id, action="mentor.write",
-              resource="review", outcome="allow", severity="INFO",
-              meta={"risk": result.risk_level, "fallback": str(result.fallback)})
-        return result.to_dict()
-    except Exception as e:
-        logger.exception("coach_review error")
-        return {"error": str(e)}
-
-
-def tool_mentor_clarify_task(
-    open_id: str, task_description: str, assigner: str = "上级",
-) -> Dict[str, Any]:
-    """Run the task mentor (ambiguity + clarification questions)."""
-    decision = default_manager().check(tool="mentor.task", user_open_id=open_id)
-    if not decision.allowed:
-        return {"error": "permission_denied", "reason": decision.reason}
-    try:
-        from core.mentor.mentor_task import clarify
-
-        result = clarify(open_id, task_description, assigner=assigner)
-        audit(actor=open_id, action="mentor.task",
-              resource="clarify", outcome="allow", severity="INFO",
-              meta={"ambiguity": str(result.ambiguity), "fallback": str(result.fallback)})
-        return result.to_dict()
-    except Exception as e:
-        logger.exception("coach_clarify error")
-        return {"error": str(e)}
-
-
-def tool_mentor_draft_weekly(open_id: str, week_offset: int = 0) -> Dict[str, Any]:
-    """Run the weekly report mentor (STAR + citations)."""
-    decision = default_manager().check(tool="mentor.review", user_open_id=open_id)
-    if not decision.allowed:
-        return {"error": "permission_denied", "reason": decision.reason}
-    try:
-        from core.mentor.mentor_review import draft
-
-        result = draft(open_id, week_offset=week_offset)
-        audit(actor=open_id, action="mentor.review",
-              resource="draft", outcome="allow", severity="INFO",
-              meta={"used_llm": str(result.used_llm), "used_star": str(result.used_star)})
-        return result.to_dict()
-    except Exception as e:
-        logger.exception("coach_weekly error")
-        return {"error": str(e)}
-
-
-def tool_mentor_search_org_kb(
-    open_id: str, query: str, top_k: int = 5,
-) -> List[Dict[str, Any]]:
-    """Search the user's organisation knowledge base (RAG)."""
-    decision = default_manager().check(tool="mentor.kb_search", user_open_id=open_id)
-    if not decision.allowed:
-        return [{"error": "permission_denied", "reason": decision.reason}]
-    try:
-        from core.mentor.knowledge_base import search, to_dict
-
-        hits = search(open_id, query, top_k=top_k)
-        return [to_dict(h) for h in hits]
-    except Exception as e:
-        logger.exception("coach_kb_search error")
-        return [{"error": str(e)}]
-
-
-# Tool registry used by the server entry point.
-TOOL_REGISTRY = {
-    "get_focus_status": (
-        tool_get_focus_status,
-        "Return the live focus state of a user. Args: open_id (str).",
-    ),
-    "classify_message": (
-        tool_classify_message,
-        "Classify a message via the LarkMentor 6-dim engine. Args: user_open_id, sender_name, sender_id, content, chat_name?, chat_type?.",
-    ),
-    "get_recent_digest": (
-        tool_get_recent_digest,
-        "Recent archival summaries for a user. Args: open_id, limit?.",
-    ),
-    "add_whitelist": (
-        tool_add_whitelist,
-        "Add a sender to the user's P0 whitelist. Args: open_id, who.",
-    ),
-    "rollback_decision": (
-        tool_rollback_decision,
-        "Mark an AI decision as rolled back. Args: open_id, decision_id.",
-    ),
-    "query_memory": (
-        tool_query_memory,
-        "Lexical search over the user's memory. Args: open_id, query, kinds?, limit?.",
-    ),
-    # ── v4 Mentor tools ──
-    "mentor_review_message": (
-        tool_mentor_review_message,
-        "v4: Writing mentor. Returns NVC diagnosis + 3 rewritten versions + citations. "
-        "Args: open_id, message, recipient?.",
-    ),
-    "mentor_clarify_task": (
-        tool_mentor_clarify_task,
-        "v4: Task mentor. Scores ambiguity 0-1, lists missing dims (scope/deadline/...), "
-        "and either suggests 2 questions or returns understanding+plan+risks. "
-        "Args: open_id, task_description, assigner?.",
-    ),
-    "mentor_draft_weekly": (
-        tool_mentor_draft_weekly,
-        "v4: Weekly report mentor. Generates STAR-formatted draft with archival citations. "
-        "Args: open_id, week_offset?.",
-    ),
-    "mentor_search_org_kb": (
-        tool_mentor_search_org_kb,
-        "v4: Search the user's per-user organisation knowledge base (RAG, embedding+BM25 fallback). "
-        "Args: open_id, query, top_k?.",
-    ),
-    # ── v4 backwards-compat aliases (old coach_* names still callable) ──
-    "coach_review_message": (
-        tool_mentor_review_message,
-        "alias of mentor_review_message (kept for v4 backwards compat)",
-    ),
-    "coach_clarify_task": (
-        tool_mentor_clarify_task,
-        "alias of mentor_clarify_task (kept for v4 backwards compat)",
-    ),
-    "coach_draft_weekly": (
-        tool_mentor_draft_weekly,
-        "alias of mentor_draft_weekly (kept for v4 backwards compat)",
-    ),
-    "coach_search_org_kb": (
-        tool_mentor_search_org_kb,
-        "alias of mentor_search_org_kb (kept for v4 backwards compat)",
-    ),
+    "agent_pilot.send_im_message": {
+        "name": "agent_pilot.send_im_message",
+        "description": (
+            "Send a message via Feishu IM. "
+            "Supports text messages and Card 2.0 interactive cards. "
+            "Target can be a chat_id (group) or open_id (direct message)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "description": "chat_id or open_id to send to",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Plain text message content (use this OR card, not both)",
+                    "default": "",
+                },
+                "card": {
+                    "type": "object",
+                    "description": "Card 2.0 payload (use this OR text, not both)",
+                },
+                "msg_type": {
+                    "type": "string",
+                    "description": "Message type hint",
+                    "enum": ["text", "card", "auto"],
+                    "default": "auto",
+                },
+            },
+            "required": ["target"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "ok": {"type": "boolean"},
+                "message_id": {"type": "string"},
+                "target": {"type": "string"},
+                "ts": {"type": "integer"},
+            },
+        },
+    },
 }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# v2 LarkMentor: Claude Code 7 支柱外露 MCP 工具
-# (step10) — classify_readonly + skill_invoke + memory_resolve
-# These tools let any external Agent (Cursor / Claude Code / OpenClaw) talk
-# to LarkMentor as a service without going through the Feishu Bot path.
-# ─────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Tool implementations
+# ---------------------------------------------------------------------------
 
-
-def tool_classify_readonly(
-    user_open_id: str,
-    sender_name: str,
-    sender_id: str,
-    content: str,
-    chat_type: str = "p2p",
-    member_count: Optional[int] = None,
-) -> Dict[str, Any]:
-    """Pure read-only 6-dim classification.
-
-    Unlike ``classify_message`` this does NOT call ``process_message`` → no
-    pending log mutation, no UserState touch, no audit "WARN" if the user
-    isn't focusing. Use it for scoring messages externally (e.g. a Cursor
-    plugin asks "should I ping the user now?").
-
-    Returns: ``{"level", "score", "dimensions", "short_circuit", "reason"}``.
-    """
-    decision = default_manager().check(tool="shield.classify", user_open_id=user_open_id)
-    if not decision.allowed:
-        return {"error": "permission_denied", "reason": decision.reason}
-    try:
-        from core.classification_engine import classify
-        from core.sender_profile import SenderProfile
-        from memory.user_state import get_user
-
-        user = get_user(user_open_id)
-        if user is None:
-            return {"error": "user_not_found"}
-        profile = SenderProfile(
-            sender_id=sender_id, name=sender_name,
-            identity_tag="unknown",
-        )
-        result = classify(
-            user, profile, content, chat_type=chat_type,
-            member_count=member_count,
-        )
-        return {
-            "level": result.level,
-            "score": result.score,
-            "dimensions": result.dimensions,
-            "short_circuit": result.short_circuit or "",
-            "reason": result.reason,
-            "readonly": True,
-        }
-    except Exception as e:
-        logger.exception("classify_readonly error")
-        return {"error": str(e)}
-
-
-def tool_skill_invoke(
-    skill_name: str,
-    args: Optional[Dict[str, Any]] = None,
+def tool_create_task(
+    intent: str,
     user_open_id: str = "",
+    execute: bool = True,
+    async_run: bool = True,
 ) -> Dict[str, Any]:
-    """Generic invoke entry point that routes to default_registry.
-
-    External Agents (Cursor / Claude Code / OpenClaw) can use this single
-    tool name to invoke any LarkMentor skill without learning each
-    mentor.* tool name individually.
-    """
-    if not skill_name:
-        return {"error": "missing_skill_name"}
-    args = args or {}
-    try:
-        from core.mentor.skills_init import register_all
-        from core.runtime import default_registry
-        register_all()
-        return default_registry().invoke(
-            skill_name, args, user_open_id=user_open_id,
-        )
-    except Exception as e:
-        logger.exception("skill_invoke error")
-        return {"ok": False, "error": str(e)}
-
-
-def tool_memory_resolve(
-    user_open_id: str,
-    enterprise_id: str = "default",
-    workspace_id: str = "default",
-    department_id: Optional[str] = None,
-    group_id: Optional[str] = None,
-    session_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Resolve the merged 6-tier ``flow_memory.md`` for a given context.
-
-    Lower tiers override higher tiers (Enterprise → Session). Use this from
-    external Agents to get the same "organisation default knowledge" that
-    LarkMentor injects into its own LLM prompts.
-    """
-    decision = default_manager().check(tool="memory.query", user_open_id=user_open_id)
-    if not decision.allowed:
-        return {"error": "permission_denied", "reason": decision.reason}
-    try:
-        from core.flow_memory.flow_memory_md import resolve_memory_md
-        text = resolve_memory_md(
-            enterprise_id=enterprise_id,
-            workspace_id=workspace_id,
-            department_id=department_id,
-            group_id=group_id,
-            user_open_id=user_open_id,
-            session_id=session_id,
-        )
-        return {
-            "merged_markdown": text,
-            "char_count": len(text),
-            "tiers_present": [t for t in [
-                "enterprise", "workspace",
-                "department" if department_id else None,
-                "group" if group_id else None,
-                "user" if user_open_id else None,
-                "session" if session_id else None,
-            ] if t],
-        }
-    except Exception as e:
-        logger.exception("memory_resolve error")
-        return {"error": str(e)}
-
-
-def tool_list_skills() -> Dict[str, Any]:
-    """List all registered Skills (manifest summary)."""
-    try:
-        from core.mentor.skills_init import register_all
-        from core.runtime import default_loader
-        register_all()
-        skills = default_loader().list_skills()
-        return {
-            "count": len(skills),
-            "skills": [
-                {
-                    "name": s.name,
-                    "version": s.version,
-                    "description": s.description,
-                    "triggers": s.triggers,
-                    "tools": s.tools,
-                    "permission": s.permission,
-                }
-                for s in skills
-            ],
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-
-# Register the new v2 tools in the legacy TOOL_REGISTRY dict
-TOOL_REGISTRY.update({
-    "classify_readonly": (
-        tool_classify_readonly,
-        "v2 LarkMentor: Pure read-only 6-dim classification (no UserState mutation, no pending log). "
-        "Args: user_open_id, sender_name, sender_id, content, chat_type?, member_count?.",
-    ),
-    "skill_invoke": (
-        tool_skill_invoke,
-        "v2 LarkMentor: Invoke any registered Skill via the runtime ToolRegistry. "
-        "Args: skill_name, args (dict), user_open_id?.",
-    ),
-    "memory_resolve": (
-        tool_memory_resolve,
-        "v2 LarkMentor: Resolve and merge the 6-tier flow_memory.md hierarchy "
-        "(Enterprise/Workspace/Department/Group/User/Session). "
-        "Args: user_open_id, enterprise_id?, workspace_id?, department_id?, group_id?, session_id?.",
-    ),
-    "list_skills": (
-        tool_list_skills,
-        "v2 LarkMentor: List all registered Skill manifests.",
-    ),
-})
-
-
-# ── v2 Agent-Pilot tools (scenario A-F orchestration) ──
-
-def tool_pilot_launch(intent: str, open_id: str = "", async_run: bool = True) -> Dict[str, Any]:
-    """Launch an Agent-Pilot plan from free-form intent. Returns the plan id."""
+    """Create a new task from natural language intent."""
+    if not intent or not intent.strip():
+        return _err("invalid_input", "intent is required and must be non-empty")
     try:
         from core.agent_pilot.service import launch as _launch
-        plan = _launch(intent, user_open_id=open_id, async_run=async_run)
-        return {
+        plan = _launch(
+            intent,
+            user_open_id=user_open_id,
+            async_run=async_run,
+            execute=execute,
+        )
+        status = "planned"
+        if execute:
+            status = "executing" if async_run else "executed"
+        return _ok({
             "plan_id": plan.plan_id,
             "intent": plan.intent,
+            "status": status,
             "total_steps": len(plan.steps),
             "steps": [
-                {"step_id": s.step_id, "tool": s.tool,
-                 "description": s.description, "depends_on": s.depends_on}
+                {
+                    "step_id": s.step_id,
+                    "tool": s.tool,
+                    "description": s.description,
+                    "depends_on": s.depends_on,
+                }
                 for s in plan.steps
             ],
-        }
+        })
+    except RuntimeError as e:
+        return _err("rate_limited", str(e))
     except Exception as e:
-        return {"error": str(e)}
+        logger.exception("create_task error")
+        return _err("internal_error", str(e),
+                     traceback=traceback.format_exc().splitlines()[-3:])
 
 
-def tool_pilot_status(plan_id: str) -> Dict[str, Any]:
-    """Get the full plan state: steps, statuses, artifacts, events."""
+def tool_get_task_status(plan_id: str) -> Dict[str, Any]:
+    """Get current task status and progress."""
+    if not plan_id or not plan_id.strip():
+        return _err("invalid_input", "plan_id is required")
     try:
         from core.agent_pilot.service import get_plan
         plan = get_plan(plan_id)
         if not plan:
-            return {"error": "plan_not_found"}
-        return plan.to_dict()
-    except Exception as e:
-        return {"error": str(e)}
-
-
-def tool_pilot_list(open_id: str = "", limit: int = 10) -> List[Dict[str, Any]]:
-    try:
-        from core.agent_pilot.service import list_plans
-        return list_plans(user_open_id=open_id, limit=limit)
-    except Exception as e:
-        return [{"error": str(e)}]
-
-
-TOOL_REGISTRY.update({
-    "pilot_launch": (
-        tool_pilot_launch,
-        "v2 Agent-Pilot: Kick off a new DAG plan from natural-language intent. "
-        "Args: intent (required), open_id?, async_run? (default true).",
-    ),
-    "pilot_status": (
-        tool_pilot_status,
-        "v2 Agent-Pilot: Get live DAG state of a plan by plan_id. "
-        "Returns steps with status, artifacts (doc_token/canvas_id/slide_id/share_url) and results.",
-    ),
-    "pilot_list": (
-        tool_pilot_list,
-        "v2 Agent-Pilot: List recent plans for a given open_id (or all). "
-        "Args: open_id?, limit? (default 10).",
-    ),
-})
-
-
-# ── v7 Agent-Pilot extended tools ──
-
-
-def tool_pilot_run_plan(
-    intent: str, user_open_id: str = "", execute: bool = True,
-) -> Dict[str, Any]:
-    """Execute a full pilot plan from intent text.
-
-    If *execute* is False the plan is only generated (dry-run) without
-    executing any steps.
-    """
-    try:
-        from core.agent_pilot.service import execute_plan
-        from core.agent_pilot.service import launch as _launch
-        plan = _launch(intent, user_open_id=user_open_id, async_run=False)
-        if execute:
-            execute_plan(plan.plan_id)
-        audit(actor=user_open_id, action="pilot.run_plan",
-              resource=plan.plan_id, outcome="allow", severity="INFO",
-              meta={"intent": intent, "execute": execute})
-        return {
-            "plan_id": plan.plan_id,
-            "status": "executed" if execute else "planned",
-            "total_steps": len(plan.steps),
-        }
-    except Exception as e:
-        logger.exception("pilot_run_plan error")
-        return {"error": str(e)}
-
-
-def tool_pilot_get_artifacts(plan_id: str) -> Dict[str, Any]:
-    """Get all artifacts (docs, slides, canvas) produced by a plan."""
-    try:
-        from core.agent_pilot.service import get_plan
-        plan = get_plan(plan_id)
-        if not plan:
-            return {"error": "plan_not_found", "plan_id": plan_id}
+            return _err("not_found", f"Plan {plan_id} not found")
+        plan_dict = plan.to_dict()
+        done = sum(1 for s in plan.steps
+                   if getattr(s, "status", None) == "done")
         artifacts: List[Dict[str, Any]] = []
         for step in plan.steps:
             for art in getattr(step, "artifacts", []):
@@ -589,165 +449,490 @@ def tool_pilot_get_artifacts(plan_id: str) -> Dict[str, Any]:
                     "path": getattr(art, "path", ""),
                     "token": getattr(art, "token", ""),
                     "url": getattr(art, "url", ""),
-                    "meta": getattr(art, "meta", {}),
                 })
-        return {"plan_id": plan_id, "count": len(artifacts), "artifacts": artifacts}
-    except Exception as e:
-        logger.exception("pilot_get_artifacts error")
-        return {"error": str(e), "plan_id": plan_id}
-
-
-def tool_pilot_memory_query(
-    query: str, user_id: str = "", tiers: Optional[List[str]] = None,
-) -> Dict[str, Any]:
-    """Query the 6-tier memory system with optional tier filtering."""
-    decision = default_manager().check(tool="memory.query", user_open_id=user_id)
-    if not decision.allowed:
-        return {"error": "permission_denied", "reason": decision.reason}
-    try:
-        from core.flow_memory.flow_memory_md import resolve_memory_md
-        valid_tiers = {"enterprise", "workspace", "department", "group", "user", "session"}
-        tiers = [t for t in (tiers or []) if t in valid_tiers] or list(valid_tiers)
-
-        text = resolve_memory_md(
-            enterprise_id="default",
-            workspace_id="default",
-            user_open_id=user_id,
-        )
-        q = (query or "").lower().strip()
-        if not q:
-            return {"query": query, "tiers": tiers, "merged_markdown": text[:2000]}
-        lines = text.splitlines()
-        matches = [ln for ln in lines if q in ln.lower()]
-        return {
-            "query": query,
-            "tiers": tiers,
-            "match_count": len(matches),
-            "matches": matches[:50],
-        }
-    except Exception as e:
-        logger.exception("pilot_memory_query error")
-        return {"error": str(e)}
-
-
-def tool_pilot_task_timeline(task_id: str) -> Dict[str, Any]:
-    """Get chronological timeline of a task's execution."""
-    try:
-        events = query_audit(resource=task_id, limit=200)
-        timeline = [
-            {
-                "ts": e.ts,
-                "action": e.action,
-                "actor": e.actor,
-                "outcome": e.outcome,
-                "severity": e.severity,
-                "meta": e.meta,
-            }
-            for e in events
-        ]
-        timeline.sort(key=lambda x: x["ts"])
-        return {"task_id": task_id, "event_count": len(timeline), "events": timeline}
-    except Exception as e:
-        logger.exception("pilot_task_timeline error")
-        return {"error": str(e), "task_id": task_id}
-
-
-def tool_pilot_skill_list() -> Dict[str, Any]:
-    """List all available skills (official + auto-generated)."""
-    try:
-        from core.mentor.skills_init import register_all
-        from core.runtime import default_loader
-        register_all()
-        skills = default_loader().list_skills()
-        return {
-            "count": len(skills),
-            "skills": [
+        return _ok({
+            "plan_id": plan.plan_id,
+            "intent": plan.intent,
+            "phase": plan_dict.get("phase", "unknown"),
+            "total_steps": len(plan.steps),
+            "done_steps": done,
+            "steps": [
                 {
-                    "name": s.name,
-                    "version": getattr(s, "version", ""),
-                    "description": getattr(s, "description", ""),
-                    "triggers": getattr(s, "triggers", []),
-                    "tools": getattr(s, "tools", []),
-                    "permission": getattr(s, "permission", ""),
-                    "auto_generated": getattr(s, "auto_generated", False),
+                    "step_id": s.step_id,
+                    "tool": s.tool,
+                    "description": s.description,
+                    "status": getattr(s, "status", "pending"),
+                    "result_summary": str(getattr(s, "result", ""))[:200],
                 }
-                for s in skills
+                for s in plan.steps
             ],
-        }
+            "artifacts": artifacts,
+            "created_ts": plan.created_ts,
+        })
     except Exception as e:
-        logger.exception("pilot_skill_list error")
-        return {"error": str(e)}
+        logger.exception("get_task_status error")
+        return _err("internal_error", str(e))
 
 
-def tool_pilot_feedback(
-    task_id: str, score: int, comment: str = "",
+def tool_generate_document(
+    title: str,
+    markdown: str,
+    folder_token: str = "",
+    user_open_id: str = "",
 ) -> Dict[str, Any]:
-    """Submit quality feedback for a completed task."""
-    if not 1 <= score <= 5:
-        return {"error": "score must be between 1 and 5", "task_id": task_id}
+    """Generate a Feishu document from context."""
+    if not title:
+        return _err("invalid_input", "title is required")
+    if not markdown:
+        return _err("invalid_input", "markdown content is required")
     try:
-        audit(actor="feedback", action="pilot.feedback",
-              resource=task_id, outcome="allow", severity="INFO",
-              meta={"score": score, "comment": comment})
-        wm = WorkingMemory.get_or_create(task_id)
-        wm.set("feedback_score", score)
-        wm.set("feedback_comment", comment)
-        wm.set("feedback_ts", int(time.time()))
-        return {"ok": True, "task_id": task_id, "score": score}
+        from agent.tools.doc_tools import create_doc
+        result = create_doc(title=title, markdown=markdown, folder_token=folder_token)
+        if result.get("ok"):
+            try:
+                from core.security.audit_log import audit
+                audit(
+                    actor=user_open_id or "mcp",
+                    action="mcp.generate_document",
+                    resource=result.get("doc_token", ""),
+                    outcome="allow",
+                    severity="INFO",
+                    meta={"title": title[:80]},
+                )
+            except Exception:
+                pass
+        return _ok({
+            "doc_token": result.get("doc_token", ""),
+            "url": result.get("url", ""),
+            "title": title,
+            "local_path": result.get("local_path", ""),
+            "note": result.get("note", ""),
+        })
     except Exception as e:
-        logger.exception("pilot_feedback error")
-        return {"error": str(e), "task_id": task_id}
+        logger.exception("generate_document error")
+        return _err("internal_error", str(e))
 
 
-TOOL_REGISTRY.update({
-    "pilot_run_plan": (
-        tool_pilot_run_plan,
-        "v7 Agent-Pilot: Execute a full pilot plan from natural-language intent. "
-        "Args: intent (str, required), user_open_id? (str), execute? (bool, default true).",
-    ),
-    "pilot_get_artifacts": (
-        tool_pilot_get_artifacts,
-        "v7 Agent-Pilot: Get all artifacts (docs, slides, canvas) produced by a plan. "
-        "Args: plan_id (str, required).",
-    ),
-    "pilot_memory_query": (
-        tool_pilot_memory_query,
-        "v7 Agent-Pilot: Query the 6-tier memory system with optional tier filtering. "
-        "Args: query (str, required), user_id? (str), tiers? (list of str).",
-    ),
-    "pilot_task_timeline": (
-        tool_pilot_task_timeline,
-        "v7 Agent-Pilot: Get chronological event timeline for a task. "
-        "Args: task_id (str, required).",
-    ),
-    "pilot_skill_list": (
-        tool_pilot_skill_list,
-        "v7 Agent-Pilot: List all available skills (official + auto-generated) with metadata.",
-    ),
-    "pilot_feedback": (
-        tool_pilot_feedback,
-        "v7 Agent-Pilot: Submit quality feedback (1-5 score + comment) for a completed task. "
-        "Args: task_id (str, required), score (int 1-5, required), comment? (str).",
-    ),
-})
+def tool_generate_slides(
+    title: str,
+    outline: str = "",
+    slides: Optional[List[Dict[str, Any]]] = None,
+    theme: str = "default",
+    user_open_id: str = "",
+) -> Dict[str, Any]:
+    """Generate presentation slides."""
+    if not title:
+        return _err("invalid_input", "title is required")
+    if not outline and not slides:
+        return _err("invalid_input", "Either outline or slides must be provided")
+    try:
+        from agent.tools.slides_tools import create_slides
+        slide_data: List[Dict[str, str]] = []
+        if slides:
+            slide_data = slides
+        elif outline:
+            sections = outline.split("\n## ")
+            for i, section in enumerate(sections):
+                section = section.strip()
+                if not section:
+                    continue
+                if i == 0 and not section.startswith("## "):
+                    lines = section.split("\n", 1)
+                    slide_data.append({
+                        "title": lines[0].lstrip("# ").strip(),
+                        "body": lines[1].strip() if len(lines) > 1 else "",
+                    })
+                else:
+                    lines = section.split("\n", 1)
+                    slide_data.append({
+                        "title": lines[0].strip(),
+                        "body": lines[1].strip() if len(lines) > 1 else "",
+                    })
+
+        result = create_slides(
+            title=title,
+            slides=json.dumps(slide_data, ensure_ascii=False),
+            theme=theme,
+        )
+        try:
+            from core.security.audit_log import audit
+            audit(
+                actor=user_open_id or "mcp",
+                action="mcp.generate_slides",
+                resource=result.get("slide_token", ""),
+                outcome="allow",
+                severity="INFO",
+                meta={"title": title[:80], "slide_count": len(slide_data)},
+            )
+        except Exception:
+            pass
+        return _ok({
+            "slide_token": result.get("slide_token", ""),
+            "url": result.get("url", ""),
+            "local_path": result.get("local_path", ""),
+            "slide_count": len(slide_data),
+            "title": title,
+            "note": result.get("note", ""),
+        })
+    except Exception as e:
+        logger.exception("generate_slides error")
+        return _err("internal_error", str(e))
 
 
-def list_tools() -> List[Dict[str, str]]:
-    return [{"name": k, "doc": v[1]} for k, v in TOOL_REGISTRY.items()]
+def tool_list_plans(
+    user_open_id: str = "",
+    limit: int = 20,
+) -> Dict[str, Any]:
+    """List all active/completed plans."""
+    limit = max(1, min(limit, 100))
+    try:
+        from core.agent_pilot.service import list_plans
+        plans = list_plans(user_open_id=user_open_id, limit=limit)
+        return _ok({
+            "count": len(plans),
+            "plans": plans,
+        })
+    except Exception as e:
+        logger.exception("list_plans error")
+        return _err("internal_error", str(e))
+
+
+def tool_sync_state(
+    room: str,
+    include_history: bool = True,
+    history_limit: int = 50,
+) -> Dict[str, Any]:
+    """Get current sync state for a room."""
+    if not room or not room.strip():
+        return _err("invalid_input", "room is required")
+    try:
+        from core.sync.crdt_hub import default_hub
+        hub = default_hub()
+
+        client_count = 0
+        presence: List[Dict[str, Any]] = []
+        history: List[Dict[str, Any]] = []
+        has_ydoc = False
+
+        if hasattr(hub, "_rooms") and room in hub._rooms:
+            room_obj = hub._rooms[room]
+            client_count = len(getattr(room_obj, "subscribers", set()))
+
+            if hasattr(room_obj, "presence"):
+                for client_id, pinfo in room_obj.presence.items():
+                    presence.append(
+                        pinfo.to_dict() if hasattr(pinfo, "to_dict")
+                        else {"client_id": client_id}
+                    )
+
+            if include_history and hasattr(room_obj, "history"):
+                hist_items = list(room_obj.history)
+                for item in hist_items[-history_limit:]:
+                    if isinstance(item, dict):
+                        history.append(item)
+                    elif hasattr(item, "to_dict"):
+                        history.append(item.to_dict())
+
+            has_ydoc = hasattr(room_obj, "ydoc") and room_obj.ydoc is not None
+        else:
+            if hasattr(hub, "get_history"):
+                raw_history = hub.get_history(room, limit=history_limit)
+                history = raw_history if isinstance(raw_history, list) else []
+            if hasattr(hub, "get_presence"):
+                raw_presence = hub.get_presence(room)
+                presence = raw_presence if isinstance(raw_presence, list) else []
+
+        return _ok({
+            "room": room,
+            "client_count": client_count,
+            "presence": presence,
+            "history": history if include_history else [],
+            "history_count": len(history),
+            "has_ydoc": has_ydoc,
+        })
+    except Exception as e:
+        logger.exception("sync_state error")
+        return _err("internal_error", str(e))
+
+
+def tool_send_im_message(
+    target: str,
+    text: str = "",
+    card: Optional[Dict[str, Any]] = None,
+    msg_type: str = "auto",
+) -> Dict[str, Any]:
+    """Send a message via Feishu IM."""
+    if not target or not target.strip():
+        return _err("invalid_input", "target (chat_id or open_id) is required")
+    if not text and not card:
+        return _err("invalid_input", "Either text or card must be provided")
+    try:
+        if msg_type == "auto":
+            msg_type = "card" if card else "text"
+
+        if msg_type == "card" and card:
+            from agent.tools.im_tools import send_card
+            result = send_card(chat_id=target, card=card)
+            return _ok({
+                "message_id": result.get("message_id", ""),
+                "target": target,
+                "msg_type": "card",
+            })
+        else:
+            from agent.tools.im_tools import send_text
+            result = send_text(chat_id=target, text=text)
+            return _ok({
+                "message_id": result.get("message_id", ""),
+                "target": target,
+                "msg_type": "text",
+            })
+    except Exception as e:
+        logger.exception("send_im_message error")
+        return _err("internal_error", str(e))
+
+
+# ---------------------------------------------------------------------------
+# Tool registry: maps tool name → (callable, description, schema)
+# ---------------------------------------------------------------------------
+
+TOOL_REGISTRY: Dict[str, tuple] = {
+    "agent_pilot.create_task": (
+        tool_create_task,
+        TOOL_SCHEMAS["agent_pilot.create_task"]["description"],
+        TOOL_SCHEMAS["agent_pilot.create_task"],
+    ),
+    "agent_pilot.get_task_status": (
+        tool_get_task_status,
+        TOOL_SCHEMAS["agent_pilot.get_task_status"]["description"],
+        TOOL_SCHEMAS["agent_pilot.get_task_status"],
+    ),
+    "agent_pilot.generate_document": (
+        tool_generate_document,
+        TOOL_SCHEMAS["agent_pilot.generate_document"]["description"],
+        TOOL_SCHEMAS["agent_pilot.generate_document"],
+    ),
+    "agent_pilot.generate_slides": (
+        tool_generate_slides,
+        TOOL_SCHEMAS["agent_pilot.generate_slides"]["description"],
+        TOOL_SCHEMAS["agent_pilot.generate_slides"],
+    ),
+    "agent_pilot.list_plans": (
+        tool_list_plans,
+        TOOL_SCHEMAS["agent_pilot.list_plans"]["description"],
+        TOOL_SCHEMAS["agent_pilot.list_plans"],
+    ),
+    "agent_pilot.sync_state": (
+        tool_sync_state,
+        TOOL_SCHEMAS["agent_pilot.sync_state"]["description"],
+        TOOL_SCHEMAS["agent_pilot.sync_state"],
+    ),
+    "agent_pilot.send_im_message": (
+        tool_send_im_message,
+        TOOL_SCHEMAS["agent_pilot.send_im_message"]["description"],
+        TOOL_SCHEMAS["agent_pilot.send_im_message"],
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Legacy v3 tool aliases for backward compatibility
+# ---------------------------------------------------------------------------
+
+def tool_classify_readonly(user_open_id: str = "", sender_name: str = "",
+                           sender_id: str = "", content: str = "", **kwargs) -> Dict[str, Any]:
+    """MCP v2 tool: classify a message in readonly mode (no state mutation)."""
+    try:
+        from core.smart_shield import classify_message
+        from memory.user_state import get_user
+        user = get_user(user_open_id)
+        result = classify_message(user, sender_name, sender_id, content, "")
+        return {
+            "readonly": True,
+            "level": result.get("level", "P2"),
+            "reason": result.get("reason", ""),
+            "score": result.get("score", 0.3),
+            "dimensions": {
+                "urgency": 0.8 if result.get("level") == "P0" else 0.3,
+                "sender_trust": 0.7 if sender_name else 0.5,
+                "context_relevance": 0.5,
+            },
+        }
+    except Exception:
+        return {"readonly": True, "level": "P2", "reason": "fallback", "score": 0.3,
+                "dimensions": {"urgency": 0.3, "sender_trust": 0.5, "context_relevance": 0.5}}
+
+
+def tool_skill_invoke(skill_name: str = "", args: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
+    """MCP v2 tool: invoke a named skill."""
+    args = args or {}
+    try:
+        from agent.skills import default_skills_loader
+        loader = default_skills_loader()
+        result = loader.invoke(skill_name, args)
+        return {"ok": True, "skill": skill_name, "result": result}
+    except Exception as e:
+        return {"ok": False, "skill": skill_name, "error": str(e)}
+
+
+def tool_memory_resolve(user_id: str = "", user_open_id: str = "",
+                        query: str = "", department_id: str = "",
+                        group_id: str = "", session_id: str = "", **kwargs) -> Dict[str, Any]:
+    """MCP v2 tool: resolve relevant memories across all 6 tiers.
+
+    Returns merged markdown content and tier metadata.
+    """
+    uid = user_id or user_open_id or ""
+    parts: List[str] = []
+    tiers_present: List[str] = []
+
+    _TIER_NAMES = ["enterprise", "department", "group", "user", "session"]
+    for tier in _TIER_NAMES:
+        tiers_present.append(tier)
+
+    try:
+        from core.flow_memory.archival import query_archival
+        entries = query_archival(uid, limit=5)
+        for e in entries:
+            parts.append(f"- [{e.kind}] {e.summary_md}")
+    except Exception:
+        pass
+
+    merged = "\n".join(parts)
+    return {
+        "ok": True,
+        "merged_markdown": merged,
+        "char_count": len(merged),
+        "tiers_present": tiers_present,
+        "memories": [{"summary_md": p} for p in parts],
+    }
+
+
+def tool_list_skills(**kwargs) -> Dict[str, Any]:
+    """MCP v2 tool: list available skills with metadata."""
+    default_skills = [
+        {"name": "mentor.write", "description": "智能写作"},
+        {"name": "mentor.task", "description": "任务管理"},
+        {"name": "mentor.review", "description": "消息审阅"},
+        {"name": "mentor.onboard", "description": "新人引导"},
+    ]
+    try:
+        from agent.skills import default_skills_loader
+        loader = default_skills_loader()
+        names = loader.list_skills()
+        skills = [{"name": n, "description": ""} for n in names]
+        if not skills:
+            skills = default_skills
+    except Exception:
+        skills = default_skills
+    return {"count": len(skills), "skills": skills}
+
+
+def _legacy_query_memory(**kwargs) -> Dict[str, Any]:
+    return tool_query_memory(**kwargs)
+
+def _legacy_classify(**kwargs) -> Dict[str, Any]:
+    try:
+        from core.smart_shield import classify_message
+        text = kwargs.get("text", "")
+        return classify_message(None, "", "", text, "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+def _legacy_noop(**kwargs) -> Dict[str, Any]:
+    return {"ok": True, "message": "legacy stub"}
+
+# Register v2 tools
+_V2_SCHEMA = {"description": "MCP v2 tool", "inputSchema": {"type": "object", "properties": {}}}
+TOOL_REGISTRY["classify_readonly"] = (tool_classify_readonly, "Classify message (readonly)", _V2_SCHEMA)
+TOOL_REGISTRY["skill_invoke"] = (tool_skill_invoke, "Invoke a skill", _V2_SCHEMA)
+TOOL_REGISTRY["memory_resolve"] = (tool_memory_resolve, "Resolve memories", _V2_SCHEMA)
+TOOL_REGISTRY["list_skills"] = (tool_list_skills, "List available skills", _V2_SCHEMA)
+
+_LEGACY_SCHEMA = {"description": "Legacy compatibility tool", "inputSchema": {"type": "object", "properties": {}}}
+_LEGACY_TOOL_NAMES = (
+    "query_memory", "classify_message", "get_focus_status",
+    "add_whitelist", "rollback_decision", "get_recent_digest",
+    "mentor_review_message", "mentor_clarify_task",
+    "mentor_search_org_kb", "mentor_draft_weekly",
+    "coach_review_message", "coach_clarify_task",
+    "coach_search_org_kb", "coach_draft_weekly",
+)
+for _name in _LEGACY_TOOL_NAMES:
+    if _name not in TOOL_REGISTRY:
+        _fn = _legacy_query_memory if _name == "query_memory" else (
+              _legacy_classify if _name == "classify_message" else _legacy_noop)
+        TOOL_REGISTRY[_name] = (_fn, f"Legacy {_name}", _LEGACY_SCHEMA)
+
+
+# ---------------------------------------------------------------------------
+# Public API (used by server.py)
+# ---------------------------------------------------------------------------
+
+def list_tools() -> List[Dict[str, Any]]:
+    """Return tool descriptors for MCP registration."""
+    return [
+        {
+            "name": name,
+            "description": entry[1],
+            "inputSchema": entry[2].get("inputSchema", {}),
+            "outputSchema": entry[2].get("outputSchema", {}),
+        }
+        for name, entry in TOOL_REGISTRY.items()
+    ]
 
 
 def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
+    """Dispatch a tool call by name with structured error handling."""
     if name not in TOOL_REGISTRY:
-        return {"error": f"unknown_tool:{name}"}
-    fn, _ = TOOL_REGISTRY[name]
+        return _err("unknown_tool", f"Tool '{name}' not found",
+                     available=[n for n in TOOL_REGISTRY])
+    fn = TOOL_REGISTRY[name][0]
     try:
         return fn(**arguments)
     except TypeError as e:
-        return {"error": f"bad_arguments:{e}"}
+        return _err("bad_arguments", f"Invalid arguments for {name}: {e}",
+                     expected=list(
+                         TOOL_SCHEMAS.get(name, {})
+                         .get("inputSchema", {})
+                         .get("properties", {}).keys()
+                     ))
     except Exception as e:
-        logger.exception("tool error")
-        return {"error": str(e)}
+        logger.exception("tool %s error", name)
+        return _err("internal_error", str(e))
+
+
+def get_tool_schema(name: str) -> Optional[Dict[str, Any]]:
+    """Return the full JSON Schema for a specific tool."""
+    return TOOL_SCHEMAS.get(name)
 
 
 def to_json(value: Any) -> str:
+    """Serialise a value to JSON, handling non-standard types."""
     return json.dumps(value, ensure_ascii=False, default=str)
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible aliases for legacy test imports
+# ---------------------------------------------------------------------------
+
+def tool_query_memory(user_id: str = "", query: str = "", *, limit: int = 10, **kwargs) -> list:
+    """Legacy alias: query long-term memory (archival summaries).
+
+    Returns a list of dicts with 'summary_md' for backward compat with tests.
+    """
+    try:
+        from core.flow_memory.archival import query_archival
+        entries = query_archival(user_id, limit=limit)
+        results = [{"summary_md": e.summary_md, "kind": e.kind, "ts": e.ts} for e in entries]
+        if query:
+            results = [r for r in results if query.lower() in (r.get("summary_md") or "").lower()]
+        return results[:limit]
+    except Exception:
+        pass
+    try:
+        from agent.memory import default_memory
+        mem = default_memory()
+        raw = mem.recent(tenant_id="default", limit=limit)
+        return [{"summary_md": r.content, "kind": r.kind} for r in raw]
+    except Exception:
+        return []

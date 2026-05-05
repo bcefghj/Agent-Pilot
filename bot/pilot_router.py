@@ -57,7 +57,8 @@ from core.agent_pilot.domain import (
     TaskState,
 )
 
-from . import cards_pilot
+from . import cards_pilot, cards_streaming
+from .streaming import CardStreamWriter
 
 logger = logging.getLogger("bot.pilot_router")
 
@@ -309,29 +310,26 @@ class PilotRouter:
         except Exception as e:
             return RouterResult(handled=False, task_id=task_id, error=str(e))
 
-        card = cards_pilot.task_progress_card(
+        writer = CardStreamWriter(batch_interval=0.3)
+        msg_id = writer.start(
+            chat_id=actor,
+            initial_title="Agent-Pilot 执行中",
             task_id=task_id,
-            state=task.state.value,
-            progress=0.1,
-            current_step="正在规划",
-            streaming_content="@pilot 拆解任务中...",
+            initial_step="正在规划",
         )
-        try:
-            self.card_sender(actor, card, scope="user")
-        except Exception:
-            pass
+        writer.append("@pilot 拆解任务中...\n")
 
         import threading
         t = threading.Thread(
-            target=self._async_orchestrate,
-            args=(task, actor),
+            target=self._stream_plan_execution,
+            args=(task, actor, writer),
             daemon=True,
         )
         t.start()
 
         return RouterResult(handled=True, verdict="ctx_confirmed",
-                             task_id=task_id, card=card,
-                             next_action="orchestrator_running")
+                             task_id=task_id,
+                             next_action="orchestrator_streaming")
 
     def _action_ignore(self, task_id: str, actor: str) -> RouterResult:
         try:
@@ -435,19 +433,80 @@ class PilotRouter:
 
     # ── async orchestration ─────────────────────────────────────────────
 
-    def _async_orchestrate(self, task: Task, actor_open_id: str) -> None:
-        """Background thread: run orchestrator and send delivery card on completion."""
+    # ── streaming plan execution ────────────────────────────────────────
+
+    def _stream_plan_execution(
+        self, task: Task, actor_open_id: str, writer: CardStreamWriter
+    ) -> None:
+        """Background thread: run orchestrator with streaming card updates.
+
+        Subscribes to ExecutionEvent broadcasts from the orchestrator and
+        translates them into ``CardStreamWriter`` calls so the user sees a
+        live typewriter card that progresses through each plan step.
+        """
         task_id = task.task_id
         try:
             if self.orchestrator_service is None:
                 logger.warning("orchestrator_service is None, skipping execution for %s", task_id)
+                writer.error("编排服务不可用", detail="orchestrator_service is None")
                 return
 
-            self._send_progress(actor_open_id, task_id, 0.3, "正在生成文档...")
+            total_steps = 0
+            completed_steps = 0
+
+            def _on_event(ev: Any) -> None:
+                """Receive ExecutionEvent and update the stream card."""
+                nonlocal total_steps, completed_steps
+                kind = getattr(ev, "kind", "") if not isinstance(ev, dict) else ev.get("kind", "")
+                payload = getattr(ev, "payload", {}) if not isinstance(ev, dict) else ev.get("payload", {})
+                step_id = getattr(ev, "step_id", "") if not isinstance(ev, dict) else ev.get("step_id", "")
+
+                if kind == "plan_started":
+                    total_steps = payload.get("total_steps", 1) or 1
+                    writer.set_progress(0.05, "规划完成，开始执行")
+                    writer.append(f"\n📋 共 **{total_steps}** 个步骤\n\n")
+
+                elif kind == "step_started":
+                    tool = payload.get("tool", "")
+                    desc = payload.get("description", "")
+                    progress = max(0.1, completed_steps / max(1, total_steps))
+                    writer.set_progress(progress, f"执行: {desc or tool}")
+                    writer.set_status("executing")
+                    writer.append(f"▶ **{step_id}** `{tool}` — {desc}\n")
+
+                elif kind == "step_done":
+                    completed_steps += 1
+                    duration_ms = payload.get("duration_ms", 0)
+                    progress = completed_steps / max(1, total_steps)
+                    writer.set_progress(min(0.95, progress), f"已完成 {completed_steps}/{total_steps}")
+                    writer.append(f"  ✅ 完成 (`{duration_ms}ms`)\n")
+
+                elif kind == "step_failed":
+                    completed_steps += 1
+                    error = payload.get("error", "unknown")
+                    progress = completed_steps / max(1, total_steps)
+                    writer.set_progress(min(0.95, progress))
+                    writer.append(f"  ❌ 失败: {str(error)[:120]}\n")
+
+                elif kind == "plan_done":
+                    done = payload.get("done", 0)
+                    failed = payload.get("failed", 0)
+                    writer.set_progress(1.0, "执行完毕")
+                    writer.append(f"\n📊 执行完毕: {done} 成功, {failed} 失败\n")
+
+            if hasattr(self.orchestrator_service, 'orchestrator'):
+                orch = self.orchestrator_service.orchestrator
+                if hasattr(orch, 'set_broadcaster'):
+                    orch.set_broadcaster(_on_event)
+
+            writer.set_progress(0.1, "正在生成文档...")
+            writer.set_status("generating")
+            writer.append("\n⚙️ 正在执行任务...\n\n")
 
             result_task = self.orchestrator_service.run(task, advance_state=True)
 
             artifacts: List[Dict[str, Any]] = []
+            artifact_display: List[Dict[str, str]] = []
             if result_task.plan:
                 for step in result_task.plan.steps:
                     if step.status == "done" and step.result:
@@ -460,39 +519,50 @@ class PilotRouter:
                         if artifact:
                             artifact["tool"] = step.tool
                             artifacts.append(artifact)
+                            artifact_display.append({
+                                "title": artifact.get("title", step.tool),
+                                "url": artifact.get("share_url")
+                                       or artifact.get("url")
+                                       or artifact.get("pptx_url", "#"),
+                                "icon": "📄",
+                            })
 
-            card = cards_pilot.task_delivered_card(
-                task_id=task_id,
-                artifacts=artifacts,
-                share_url=artifacts[-1].get("share_url", "") if artifacts else "",
+            writer.finish(
+                artifacts=artifact_display,
+                summary=f"任务 {task_id[-8:]} 已完成，共产出 {len(artifacts)} 个交付物",
             )
-            try:
-                self.card_sender(actor_open_id, card, scope="user")
-            except Exception as e:
-                logger.warning("delivered card send failed: %s", e)
 
             if task.source_chat_id and task.source_chat_id != actor_open_id:
+                card = cards_pilot.task_delivered_card(
+                    task_id=task_id,
+                    title=task.title or task.intent[:40],
+                    artifacts=artifacts,
+                    share_url=artifacts[-1].get("share_url", "") if artifacts else "",
+                )
                 try:
                     self.card_sender(task.source_chat_id, card, scope="chat")
                 except Exception:
                     pass
 
-            logger.info("orchestration completed for task %s, artifacts=%d",
+            logger.info("streaming orchestration completed for task %s, artifacts=%d",
                          task_id, len(artifacts))
 
         except Exception as e:
-            logger.exception("async orchestration failed for task %s: %s", task_id, e)
-            try:
-                error_card = cards_pilot.task_progress_card(
-                    task_id=task_id,
-                    state="failed",
-                    progress=0.0,
-                    current_step="执行失败",
-                    streaming_content=f"执行出错：{str(e)[:200]}",
-                )
-                self.card_sender(actor_open_id, error_card, scope="user")
-            except Exception:
-                pass
+            logger.exception("streaming orchestration failed for task %s: %s", task_id, e)
+            writer.error(
+                f"执行出错：{str(e)[:200]}",
+                detail=f"{type(e).__name__}: {e}",
+            )
+
+    def _async_orchestrate(self, task: Task, actor_open_id: str) -> None:
+        """Legacy entry point — now delegates to streaming execution."""
+        writer = CardStreamWriter(batch_interval=0.3)
+        writer.start(
+            chat_id=actor_open_id,
+            initial_title="Agent-Pilot 执行中",
+            task_id=task.task_id,
+        )
+        self._stream_plan_execution(task, actor_open_id, writer)
 
     def _send_progress(self, target: str, task_id: str, progress: float, step: str) -> None:
         try:

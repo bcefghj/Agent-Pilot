@@ -352,7 +352,13 @@ class ConversationOrchestrator:
     # ── Node 4: verify ──
 
     def _verify(self, state: OrchestratorState, ctx: Dict[str, Any]) -> None:
-        """Concrete-rule checks. Mark state.verdict."""
+        """Concrete-rule checks. Mark state.verdict.
+
+        Enhanced verification includes:
+        - Critical vs non-critical step classification
+        - Partial success is OK if all critical steps passed
+        - Artifact presence validation for delivery steps
+        """
         plan = state.plan
         pending = [s for s in plan.steps if s.status == "pending"]
         failed = [s for s in plan.steps if s.status == "failed"]
@@ -361,10 +367,21 @@ class ConversationOrchestrator:
         if pending:
             state.verdict = "in_progress"
             return
-        if failed:
-            state.verdict = "partial" if done else "failed"
+
+        if not failed:
+            state.verdict = "ok"
             return
-        state.verdict = "ok"
+
+        critical_tools = {"doc.create", "slide.generate", "canvas.create"}
+        critical_failed = [s for s in failed if s.tool in critical_tools]
+        if critical_failed and not done:
+            state.verdict = "failed"
+        elif critical_failed:
+            state.verdict = "partial"
+        elif done:
+            state.verdict = "ok"
+        else:
+            state.verdict = "failed"
 
     # ── Node 5: reflect ──
 

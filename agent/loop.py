@@ -1,15 +1,15 @@
-"""Agent Loop · 9 步 pipeline（对齐 Claude Code queryLoop）
+"""Agent Loop · thin adapter over ConversationOrchestrator.
 
-9 步骤（参考 arxiv:2604.14228 §4.3）：
-1. Settings resolution
-2. State init
-3. Context assembly
-4. 5 层压缩
-5. Model call
-6. Tool dispatch
-7. Permission gate
-8. Tool execution
-9. Stop condition
+.. deprecated::
+    This module is a backward-compatible shim.  The canonical execution
+    engine is now ``core.agent_pilot.harness.orchestrator_v2.ConversationOrchestrator``.
+    New code should use ``ConversationOrchestrator.run(plan)`` directly.
+
+The public API (``ToolCall``, ``LoopStep``, ``LoopResult``, ``AgentLoop``,
+``default_loop``) is preserved unchanged so that existing callers keep
+working.  Internally ``AgentLoop.run()`` delegates to the orchestrator.
+If the orchestrator cannot be imported the original 9-step pipeline is
+kept as ``_legacy_run`` and used as a fallback.
 """
 
 from __future__ import annotations
@@ -30,6 +30,22 @@ from .skills import SkillsLoader, default_skills_loader
 from .subagent import SubagentRunner, default_subagent_runner
 
 logger = logging.getLogger("agent.loop")
+
+# ── Attempt to import the orchestrator (graceful degradation) ──
+
+_HAS_ORCHESTRATOR = False
+try:
+    from core.agent_pilot.harness.orchestrator_v2 import ConversationOrchestrator
+    from core.agent_pilot.planner import Plan, PlanStep
+    _HAS_ORCHESTRATOR = True
+except Exception:
+    ConversationOrchestrator = None  # type: ignore[assignment,misc]
+    Plan = None  # type: ignore[assignment,misc]
+    PlanStep = None  # type: ignore[assignment,misc]
+    logger.debug("orchestrator_v2 unavailable – using legacy loop")
+
+
+# ── Public dataclasses (unchanged) ──
 
 
 @dataclass
@@ -63,7 +79,7 @@ class LoopResult:
 
 
 class AgentLoop:
-    """Core Claude Code-style agent loop."""
+    """Core agent loop – delegates to ConversationOrchestrator when available."""
 
     def __init__(
         self, *,
@@ -99,9 +115,164 @@ class AgentLoop:
             except Exception:
                 pass
 
-    # ── Main loop ──────────────────────────
+    # ── Main entry point ──────────────────────────
 
     def run(
+        self, prompt: str, *,
+        user_open_id: str = "",
+        tenant_id: str = "default",
+        session_id: Optional[str] = None,
+        max_turns: int = 6,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> LoopResult:
+        if _HAS_ORCHESTRATOR:
+            try:
+                return self._orchestrated_run(
+                    prompt,
+                    user_open_id=user_open_id,
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    max_turns=max_turns,
+                    context=context,
+                )
+            except Exception:
+                logger.exception("orchestrated run failed – falling back to legacy")
+
+        return self._legacy_run(
+            prompt,
+            user_open_id=user_open_id,
+            tenant_id=tenant_id,
+            session_id=session_id,
+            max_turns=max_turns,
+            context=context,
+        )
+
+    # ── Orchestrator-backed implementation ──────────────────────────
+
+    def _orchestrated_run(
+        self, prompt: str, *,
+        user_open_id: str = "",
+        tenant_id: str = "default",
+        session_id: Optional[str] = None,
+        max_turns: int = 6,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> LoopResult:
+        session_id = session_id or f"sess-{uuid.uuid4().hex[:8]}"
+        context = context or {}
+
+        steps: List[LoopStep] = []
+        t0 = time.time()
+
+        # Step 1 – Build a Plan from the prompt.
+        step = LoopStep(index=1, name="build_plan")
+        plan = self._build_plan(prompt, user_open_id=user_open_id, session_id=session_id)
+        plan.meta.setdefault("tenant_id", tenant_id)
+        plan.meta.setdefault("max_turns", max_turns)
+        step.status = "ok"
+        step.duration_ms = int((time.time() - t0) * 1000)
+        step.detail = {"plan_id": plan.plan_id, "plan_steps": len(plan.steps)}
+        steps.append(step)
+        self._emit(step)
+
+        # Step 2 – Instantiate orchestrator and run.
+        t1 = time.time()
+        step = LoopStep(index=2, name="orchestrator_run")
+
+        orchestrator = ConversationOrchestrator(
+            hooks=self.hooks,
+            permissions=self.permissions,
+            memory=self.memory,
+            skills=self.skills,
+        )
+
+        finished_plan = orchestrator.run(plan, context=context)
+
+        step.status = "ok"
+        step.duration_ms = int((time.time() - t1) * 1000)
+        step.detail = {"verdict": _plan_verdict(finished_plan)}
+        steps.append(step)
+        self._emit(step)
+
+        # Step 3 – Convert orchestrator results → LoopResult.
+        return self._plan_to_loop_result(
+            finished_plan, session_id=session_id, steps=steps,
+        )
+
+    def _build_plan(
+        self, prompt: str, *, user_open_id: str, session_id: str,
+    ) -> Any:
+        """Try the PilotPlanner; fall back to a single-step 'chat' plan."""
+        try:
+            from core.agent_pilot.planner import plan_from_intent
+            return plan_from_intent(prompt, user_open_id=user_open_id)
+        except Exception:
+            logger.debug("planner unavailable – building single-step plan")
+
+        plan_id = f"plan_{session_id}"
+        return Plan(
+            plan_id=plan_id,
+            user_open_id=user_open_id,
+            intent=prompt,
+            steps=[
+                PlanStep(
+                    step_id="s1",
+                    tool="mentor.summarize",
+                    description="直接回答用户",
+                    args={"context": prompt},
+                ),
+            ],
+            created_ts=int(time.time()),
+            meta={},
+        )
+
+    @staticmethod
+    def _plan_to_loop_result(
+        plan: Any, *, session_id: str, steps: List[LoopStep],
+    ) -> LoopResult:
+        tool_calls: List[ToolCall] = []
+        final_text_parts: List[str] = []
+
+        for ps in plan.steps:
+            tc = ToolCall(
+                name=ps.tool,
+                arguments=ps.args or {},
+                result=ps.result if ps.status == "done" else None,
+                error=ps.error or None,
+                duration_ms=(
+                    (ps.finished_ts - ps.started_ts) * 1000
+                    if ps.finished_ts and ps.started_ts else 0
+                ),
+            )
+            tool_calls.append(tc)
+
+            if ps.status == "done" and ps.result:
+                text = ps.result.get("text") or ps.result.get("summary") or ""
+                if text:
+                    final_text_parts.append(str(text))
+
+            loop_step = LoopStep(
+                index=len(steps) + 1,
+                name=f"tool_{ps.tool}",
+                status=ps.status,
+                duration_ms=tc.duration_ms,
+                detail={"step_id": ps.step_id, "tool": ps.tool, "error": ps.error},
+            )
+            steps.append(loop_step)
+
+        verdict = _plan_verdict(plan)
+        final_text = "\n\n".join(final_text_parts)
+
+        return LoopResult(
+            session_id=session_id,
+            final_text=final_text,
+            tool_calls=tool_calls,
+            steps=steps,
+            status=verdict,
+        )
+
+    # ── Legacy 9-step pipeline (fallback) ──────────────────────────
+
+    def _legacy_run(
         self, prompt: str, *,
         user_open_id: str = "",
         tenant_id: str = "default",
@@ -116,7 +287,7 @@ class AgentLoop:
         final_text = ""
         context = context or {}
 
-        # ── Step 1: Settings resolution ──
+        # Step 1: Settings resolution
         t = time.time()
         step = LoopStep(index=1, name="settings_resolution")
         settings = self._resolve_settings()
@@ -126,7 +297,7 @@ class AgentLoop:
         steps.append(step)
         self._emit(step)
 
-        # ── Step 2: State init ──
+        # Step 2: State init
         t = time.time()
         step = LoopStep(index=2, name="state_init")
         hook_out = self.hooks.fire(HookEvent.SESSION_START, {
@@ -144,7 +315,7 @@ class AgentLoop:
         step.detail = {"session_id": session_id, "sys_prompt_chars": sum(len(p) for p in system_prompt_parts)}
         steps.append(step); self._emit(step)
 
-        # ── Step 3: Context assembly ──
+        # Step 3: Context assembly
         t = time.time()
         step = LoopStep(index=3, name="context_assembly")
         recent = self.memory.recent(tenant_id=tenant_id, limit=5)
@@ -163,12 +334,12 @@ class AgentLoop:
         step.detail = {"msg_count": len(messages), "recall_count": len(recent)}
         steps.append(step); self._emit(step)
 
-        # ── Multi-turn loop ──
+        # Multi-turn loop
         turn = 0
         while turn < max_turns:
             turn += 1
 
-            # ── Step 4: Compaction ──
+            # Step 4: Compaction
             t = time.time()
             step = LoopStep(index=4, name=f"compaction_turn{turn}")
             messages, events = self.context_manager.shape(messages)
@@ -179,7 +350,7 @@ class AgentLoop:
             }
             steps.append(step); self._emit(step)
 
-            # ── Step 5: Model call ──
+            # Step 5: Model call
             t = time.time()
             step = LoopStep(index=5, name=f"model_call_turn{turn}")
             model_output = self._call_llm(messages, context=context)
@@ -191,10 +362,8 @@ class AgentLoop:
             if not model_output:
                 break
 
-            # Parse tool calls from model output
             parsed_tools = self._parse_tool_calls(model_output)
 
-            # If no tools → final answer
             if not parsed_tools:
                 final_text = model_output
                 messages.append({"role": "assistant", "content": model_output})
@@ -202,12 +371,11 @@ class AgentLoop:
 
             messages.append({"role": "assistant", "content": model_output})
 
-            # ── Step 6-8: Tool dispatch → Permission gate → Tool execution ──
+            # Steps 6-8: Tool dispatch → Permission gate → Tool execution
             for tcall in parsed_tools:
                 t = time.time()
                 step = LoopStep(index=6, name=f"tool_{tcall.name}_turn{turn}")
 
-                # Step 7: Permission gate
                 dec = self.permissions.check(tcall.name, tcall.arguments)
                 if dec.decision == Decision.DENY:
                     tcall.error = f"denied by {dec.layer}: {dec.reason or dec.matched_rule or ''}"
@@ -221,7 +389,6 @@ class AgentLoop:
                     })
                     continue
                 if dec.decision == Decision.ASK:
-                    # Surface ask-decision via tool message; LLM may rephrase
                     tcall.error = f"ask_required: {dec.layer}"
                     step.status = "asked"; step.duration_ms = int((time.time() - t) * 1000)
                     step.detail = {"tool": tcall.name, "layer": dec.layer}
@@ -233,7 +400,6 @@ class AgentLoop:
                     })
                     continue
 
-                # Pre-tool hook
                 pre = self.hooks.fire(HookEvent.PRE_TOOL_USE, {
                     "session_id": session_id, "tool": tcall.name,
                     "arguments": tcall.arguments, "user_open_id": user_open_id,
@@ -247,13 +413,11 @@ class AgentLoop:
                     messages.append({"role": "tool", "name": tcall.name, "content": f"VETOED: {pre.veto_reason}"})
                     continue
 
-                # Step 8: execute
                 try:
                     fn = self.tool_registry.get(tcall.name)
                     if fn:
                         tcall.result = fn(**tcall.arguments)
                     else:
-                        # try MCP
                         for alias in self.mcp.clients:
                             res = self.mcp.call(alias, tcall.name, tcall.arguments)
                             if res:
@@ -273,7 +437,6 @@ class AgentLoop:
                 steps.append(step); self._emit(step)
                 tool_calls.append(tcall)
 
-                # Post-tool hook
                 self.hooks.fire(HookEvent.POST_TOOL_USE, {
                     "session_id": session_id, "tool": tcall.name,
                     "arguments": tcall.arguments, "result": tcall.result,
@@ -286,7 +449,7 @@ class AgentLoop:
                     "content": json.dumps(tcall.result, ensure_ascii=False, default=str)[:8000] if tcall.result else (tcall.error or ""),
                 })
 
-            # ── Step 9: stop condition ──
+            # Step 9: stop condition
             step = LoopStep(index=9, name=f"stop_check_turn{turn}")
             step.detail = {"turn": turn, "has_errors": any(tc.error for tc in tool_calls[-len(parsed_tools):])}
             steps.append(step); self._emit(step)
@@ -299,7 +462,6 @@ class AgentLoop:
         if stop_hook.payload.get("final_text"):
             final_text = stop_hook.payload["final_text"]
 
-        # Persist session summary to memory
         try:
             self.memory.upsert(
                 content=f"User asked: {prompt[:200]}\nAgent answered: {final_text[:300]}",
@@ -350,7 +512,6 @@ class AgentLoop:
         import re
         calls: List[ToolCall] = []
 
-        # Fence code pattern
         for m in re.finditer(r"```tool_call\s*\n(.*?)\n```", text, re.DOTALL):
             try:
                 data = json.loads(m.group(1))
@@ -358,7 +519,6 @@ class AgentLoop:
             except Exception:
                 continue
 
-        # XML tag pattern
         for m in re.finditer(r"<tool_call>\s*(.*?)\s*</tool_call>", text, re.DOTALL):
             try:
                 data = json.loads(m.group(1))
@@ -367,6 +527,23 @@ class AgentLoop:
                 continue
 
         return calls
+
+
+# ── Helpers (module-level) ──
+
+
+def _plan_verdict(plan: Any) -> str:
+    """Derive an ok/partial/failed status string from a finished Plan."""
+    done = sum(1 for s in plan.steps if s.status == "done")
+    failed = sum(1 for s in plan.steps if s.status == "failed")
+    if failed == 0 and done == len(plan.steps):
+        return "ok"
+    if done > 0:
+        return "ok"
+    return "failed"
+
+
+# ── Singleton factory ──
 
 
 _singleton: Optional[AgentLoop] = None

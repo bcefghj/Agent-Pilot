@@ -1,54 +1,296 @@
-"""Offline merge strategy helpers (Scenario E / good-to-have offline support).
+"""Offline merge strategy with conflict resolution for Agent-Pilot.
 
-Yjs CRDTs already guarantee convergence, but we still expose two
-utilities:
+Yjs CRDTs already guarantee convergence, but this module provides a
+higher-level policy layer:
 
-* ``record_offline_update(room, update_b64)`` – append an update coming
-  from a client that was offline, so we can audit merge history.
-* ``reconcile(room)`` – compute a deterministic diff summary after
-  re-syncing so the dashboard can show "merged N offline edits".
+* **Conflict detection** – detects overlapping edits from different
+  clients on the same field/path.
+* **Resolution strategies** – ``last-writer-wins`` (default), ``merge``
+  (union of changes), or ``ask-user`` (queue for manual resolution).
+* **Bounded offline queue** – at most ``MAX_PENDING`` (1000) updates per
+  room; oldest entries are evicted when the limit is reached.
+* **Automatic reconciliation** – on reconnect, pending updates are
+  flushed in causal order and the result is broadcast to the room.
+* **Audit trail** – every merge decision is logged to disk for
+  post-mortem debugging and compliance.
+
+Data is stored under ``data/pilot_offline/``.
 """
 
 from __future__ import annotations
 
+import enum
 import json
 import logging
 import os
+import threading
 import time
-from typing import Any, Dict, List
+from collections import defaultdict, deque
+from dataclasses import asdict, dataclass, field
+from typing import Any, Callable, Deque, Dict, List, Optional
 
 logger = logging.getLogger("pilot.sync.offline")
 
 DATA_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "data", "pilot_offline",
+    "data",
+    "pilot_offline",
 )
+
+MAX_PENDING = 1000
 
 
 def _ensure_dir():
     os.makedirs(DATA_DIR, exist_ok=True)
 
 
-def record_offline_update(room: str, update_b64: str, client_id: str = "") -> None:
-    _ensure_dir()
-    path = os.path.join(DATA_DIR, f"{room}.log.jsonl")
-    entry = {
-        "ts": int(time.time()),
-        "client_id": client_id,
-        "update_b64_len": len(update_b64),
-    }
-    try:
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry) + "\n")
-    except Exception as e:
-        logger.debug("record_offline_update skipped: %s", e)
+# ── Conflict resolution strategies ──
 
 
-def reconcile(room: str) -> Dict[str, Any]:
-    _ensure_dir()
-    path = os.path.join(DATA_DIR, f"{room}.log.jsonl")
-    entries: List[Dict[str, Any]] = []
-    if os.path.exists(path):
+class ConflictStrategy(str, enum.Enum):
+    LAST_WRITER_WINS = "last_writer_wins"
+    MERGE = "merge"
+    ASK_USER = "ask_user"
+
+
+@dataclass
+class OfflineUpdate:
+    """A single update recorded while a client was offline."""
+
+    room: str
+    client_id: str
+    update_b64: str
+    field_path: str = ""
+    ts: float = 0.0
+    resolved: bool = False
+    resolution: str = ""
+
+    def __post_init__(self):
+        if self.ts == 0.0:
+            self.ts = time.time()
+
+
+@dataclass
+class ConflictRecord:
+    """Records a detected conflict and how it was resolved."""
+
+    room: str
+    field_path: str
+    clients: List[str]
+    strategy: str
+    winner: str = ""
+    ts: float = 0.0
+    details: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.ts == 0.0:
+            self.ts = time.time()
+
+
+@dataclass
+class MergeAuditEntry:
+    """A single entry in the merge audit trail."""
+
+    action: str
+    room: str
+    client_id: str = ""
+    ts: float = 0.0
+    details: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.ts == 0.0:
+            self.ts = time.time()
+
+
+# ── Offline queue ──
+
+
+class OfflineQueue:
+    """Bounded FIFO queue for offline updates with per-room isolation."""
+
+    def __init__(self, max_size: int = MAX_PENDING):
+        self._max_size = max_size
+        self._queues: Dict[str, Deque[OfflineUpdate]] = defaultdict(
+            lambda: deque(maxlen=max_size),
+        )
+        self._lock = threading.Lock()
+        self._evicted_count: Dict[str, int] = defaultdict(int)
+
+    def push(self, update: OfflineUpdate) -> bool:
+        """Add an update to the queue. Returns False if the entry was evicted."""
+        with self._lock:
+            q = self._queues[update.room]
+            was_full = len(q) >= self._max_size
+            q.append(update)
+            if was_full:
+                self._evicted_count[update.room] += 1
+                logger.debug(
+                    "offline queue overflow room=%s evicted=%d",
+                    update.room,
+                    self._evicted_count[update.room],
+                )
+            return not was_full
+
+    def drain(self, room: str) -> List[OfflineUpdate]:
+        """Remove and return all pending updates for *room* in FIFO order."""
+        with self._lock:
+            q = self._queues.pop(room, deque())
+            return list(q)
+
+    def peek(self, room: str) -> List[OfflineUpdate]:
+        with self._lock:
+            return list(self._queues.get(room, []))
+
+    def depth(self, room: str) -> int:
+        with self._lock:
+            return len(self._queues.get(room, []))
+
+    def total_depth(self) -> int:
+        with self._lock:
+            return sum(len(q) for q in self._queues.values())
+
+    def rooms_with_pending(self) -> List[str]:
+        with self._lock:
+            return [r for r, q in self._queues.items() if q]
+
+    @property
+    def stats(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "rooms": len(self._queues),
+                "total_pending": sum(len(q) for q in self._queues.values()),
+                "evicted": dict(self._evicted_count),
+            }
+
+
+# ── Conflict resolver ──
+
+
+class ConflictResolver:
+    """Detects conflicts in a batch of offline updates and resolves them."""
+
+    def __init__(self, default_strategy: ConflictStrategy = ConflictStrategy.LAST_WRITER_WINS):
+        self._default_strategy = default_strategy
+        self._field_strategies: Dict[str, ConflictStrategy] = {}
+        self._pending_user_decisions: List[ConflictRecord] = []
+        self._lock = threading.Lock()
+
+    def set_strategy(self, field_path: str, strategy: ConflictStrategy) -> None:
+        """Override resolution strategy for a specific field path."""
+        self._field_strategies[field_path] = strategy
+
+    def detect_conflicts(
+        self, updates: List[OfflineUpdate],
+    ) -> List[ConflictRecord]:
+        """Detect conflicting updates (multiple clients editing the same field)."""
+        by_field: Dict[str, List[OfflineUpdate]] = defaultdict(list)
+        for u in updates:
+            key = u.field_path or "__root__"
+            by_field[key].append(u)
+
+        conflicts: List[ConflictRecord] = []
+        for field_path, field_updates in by_field.items():
+            client_ids = list({u.client_id for u in field_updates})
+            if len(client_ids) > 1:
+                strategy = self._field_strategies.get(
+                    field_path, self._default_strategy,
+                )
+                conflicts.append(
+                    ConflictRecord(
+                        room=field_updates[0].room,
+                        field_path=field_path,
+                        clients=client_ids,
+                        strategy=strategy.value,
+                    ),
+                )
+        return conflicts
+
+    def resolve(
+        self,
+        updates: List[OfflineUpdate],
+        conflicts: List[ConflictRecord],
+    ) -> List[OfflineUpdate]:
+        """Apply resolution strategies and return the winning updates."""
+        conflict_fields = {c.field_path for c in conflicts}
+
+        non_conflicting = [
+            u for u in updates if (u.field_path or "__root__") not in conflict_fields
+        ]
+
+        resolved: List[OfflineUpdate] = list(non_conflicting)
+
+        for conflict in conflicts:
+            strategy = ConflictStrategy(conflict.strategy)
+            field_updates = [
+                u
+                for u in updates
+                if (u.field_path or "__root__") == conflict.field_path
+            ]
+
+            if strategy == ConflictStrategy.LAST_WRITER_WINS:
+                winner = max(field_updates, key=lambda u: u.ts)
+                winner.resolved = True
+                winner.resolution = "last_writer_wins"
+                conflict.winner = winner.client_id
+                resolved.append(winner)
+
+            elif strategy == ConflictStrategy.MERGE:
+                for u in field_updates:
+                    u.resolved = True
+                    u.resolution = "merged"
+                conflict.winner = "all"
+                resolved.extend(field_updates)
+
+            elif strategy == ConflictStrategy.ASK_USER:
+                with self._lock:
+                    self._pending_user_decisions.append(conflict)
+                for u in field_updates:
+                    u.resolution = "pending_user"
+
+        resolved.sort(key=lambda u: u.ts)
+        return resolved
+
+    def get_pending_decisions(self) -> List[ConflictRecord]:
+        with self._lock:
+            return list(self._pending_user_decisions)
+
+    def submit_user_decision(
+        self, field_path: str, room: str, winner_client_id: str,
+    ) -> bool:
+        """Submit a user's manual conflict resolution decision."""
+        with self._lock:
+            for i, conflict in enumerate(self._pending_user_decisions):
+                if conflict.field_path == field_path and conflict.room == room:
+                    conflict.winner = winner_client_id
+                    conflict.strategy = "user_decision"
+                    self._pending_user_decisions.pop(i)
+                    return True
+        return False
+
+
+# ── Audit trail ──
+
+
+class AuditTrail:
+    """Persistent append-only log of all merge decisions."""
+
+    def __init__(self, data_dir: str = DATA_DIR):
+        self._data_dir = data_dir
+
+    def log(self, entry: MergeAuditEntry) -> None:
+        try:
+            os.makedirs(self._data_dir, exist_ok=True)
+            path = os.path.join(self._data_dir, f"{entry.room}.audit.jsonl")
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(asdict(entry)) + "\n")
+        except Exception as exc:
+            logger.debug("audit log write failed: %s", exc)
+
+    def read(self, room: str, limit: int = 200) -> List[Dict[str, Any]]:
+        path = os.path.join(self._data_dir, f"{room}.audit.jsonl")
+        entries: List[Dict[str, Any]] = []
+        if not os.path.exists(path):
+            return entries
         try:
             with open(path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -56,18 +298,202 @@ def reconcile(room: str) -> Dict[str, Any]:
                         entries.append(json.loads(line))
                     except Exception:
                         continue
-        except Exception as e:
-            logger.debug("reconcile read failed: %s", e)
-    return {
-        "room": room,
-        "offline_updates": len(entries),
-        "by_client": _count_by(entries, "client_id"),
-    }
+            return entries[-limit:]
+        except Exception as exc:
+            logger.debug("audit read failed: %s", exc)
+            return entries
 
 
-def _count_by(entries: List[Dict[str, Any]], key: str) -> Dict[str, int]:
-    out: Dict[str, int] = {}
-    for e in entries:
-        k = e.get(key, "") or "unknown"
-        out[k] = out.get(k, 0) + 1
-    return out
+# ── Main merge engine ──
+
+
+class OfflineMergeEngine:
+    """Coordinates offline queue, conflict resolution, and audit trail.
+
+    Typical lifecycle:
+    1. Client goes offline → updates are queued via ``enqueue()``.
+    2. Client reconnects → ``reconcile()`` is called, which detects
+       conflicts, applies the resolution strategy, and returns the
+       result set.
+    3. Caller feeds the result into ``CrdtHub.apply_update()`` to
+       broadcast to the room.
+    """
+
+    def __init__(
+        self,
+        default_strategy: ConflictStrategy = ConflictStrategy.LAST_WRITER_WINS,
+        max_pending: int = MAX_PENDING,
+        on_reconcile: Optional[Callable[[str, List[OfflineUpdate]], None]] = None,
+    ):
+        self.queue = OfflineQueue(max_size=max_pending)
+        self.resolver = ConflictResolver(default_strategy=default_strategy)
+        self.audit = AuditTrail()
+        self._on_reconcile = on_reconcile
+        self._stats_lock = threading.Lock()
+        self._reconcile_count: int = 0
+        self._conflict_count: int = 0
+
+    # ── Enqueue ──
+
+    def enqueue(
+        self,
+        room: str,
+        update_b64: str,
+        client_id: str = "",
+        field_path: str = "",
+    ) -> bool:
+        """Queue an offline update. Returns False if the queue overflowed."""
+        update = OfflineUpdate(
+            room=room,
+            client_id=client_id,
+            update_b64=update_b64,
+            field_path=field_path,
+        )
+        ok = self.queue.push(update)
+        self.audit.log(
+            MergeAuditEntry(
+                action="enqueue",
+                room=room,
+                client_id=client_id,
+                details={"field_path": field_path, "queue_ok": ok},
+            ),
+        )
+        return ok
+
+    # ── Reconcile on reconnect ──
+
+    def reconcile(self, room: str) -> Dict[str, Any]:
+        """Drain the offline queue for *room*, resolve conflicts, and return a
+        summary dict suitable for broadcasting to the room.
+        """
+        pending = self.queue.drain(room)
+        if not pending:
+            return {
+                "room": room,
+                "offline_updates": 0,
+                "conflicts": 0,
+                "resolved": [],
+                "pending_decisions": [],
+            }
+
+        conflicts = self.resolver.detect_conflicts(pending)
+        resolved = self.resolver.resolve(pending, conflicts)
+
+        with self._stats_lock:
+            self._reconcile_count += 1
+            self._conflict_count += len(conflicts)
+
+        for conflict in conflicts:
+            self.audit.log(
+                MergeAuditEntry(
+                    action="conflict_detected",
+                    room=room,
+                    details={
+                        "field_path": conflict.field_path,
+                        "clients": conflict.clients,
+                        "strategy": conflict.strategy,
+                        "winner": conflict.winner,
+                    },
+                ),
+            )
+
+        for update in resolved:
+            if update.resolved:
+                self.audit.log(
+                    MergeAuditEntry(
+                        action="resolved",
+                        room=room,
+                        client_id=update.client_id,
+                        details={
+                            "field_path": update.field_path,
+                            "resolution": update.resolution,
+                        },
+                    ),
+                )
+
+        if self._on_reconcile:
+            try:
+                self._on_reconcile(room, resolved)
+            except Exception as exc:
+                logger.debug("on_reconcile callback failed: %s", exc)
+
+        self.audit.log(
+            MergeAuditEntry(
+                action="reconcile_complete",
+                room=room,
+                details={
+                    "total_pending": len(pending),
+                    "conflicts": len(conflicts),
+                    "resolved": len(resolved),
+                },
+            ),
+        )
+
+        return {
+            "room": room,
+            "offline_updates": len(pending),
+            "conflicts": len(conflicts),
+            "resolved": [
+                {
+                    "client_id": u.client_id,
+                    "field_path": u.field_path,
+                    "resolution": u.resolution,
+                    "ts": u.ts,
+                }
+                for u in resolved
+            ],
+            "pending_decisions": [
+                asdict(d) for d in self.resolver.get_pending_decisions()
+            ],
+        }
+
+    # ── Stats ──
+
+    @property
+    def stats(self) -> Dict[str, Any]:
+        with self._stats_lock:
+            return {
+                "queue": self.queue.stats,
+                "reconcile_count": self._reconcile_count,
+                "conflict_count": self._conflict_count,
+                "pending_user_decisions": len(
+                    self.resolver.get_pending_decisions(),
+                ),
+            }
+
+
+# ── Module-level singleton ──
+
+_default_engine: Optional[OfflineMergeEngine] = None
+
+
+def default_engine(
+    strategy: ConflictStrategy = ConflictStrategy.LAST_WRITER_WINS,
+) -> OfflineMergeEngine:
+    global _default_engine
+    if _default_engine is None:
+        _default_engine = OfflineMergeEngine(default_strategy=strategy)
+    return _default_engine
+
+
+# ── Backward-compatible convenience functions ──
+
+
+def record_offline_update(
+    room: str,
+    update_b64: str,
+    client_id: str = "",
+    field_path: str = "",
+) -> None:
+    """Queue an offline update (backward-compatible API)."""
+    default_engine().enqueue(
+        room=room,
+        update_b64=update_b64,
+        client_id=client_id,
+        field_path=field_path,
+    )
+
+
+def reconcile(room: str) -> Dict[str, Any]:
+    """Drain offline queue and reconcile (backward-compatible API)."""
+    return default_engine().reconcile(room)
