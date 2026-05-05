@@ -100,9 +100,8 @@ class TestIntentToDeliveryPipeline:
 
     def test_orchestrator_executes_plan(self):
         """ConversationOrchestrator should execute plan steps with mocked tools."""
-        from unittest.mock import MagicMock
         from core.agent_pilot.harness.orchestrator_v2 import ConversationOrchestrator
-        from core.agent_pilot.harness.tool_registry import ToolRegistry
+        from core.agent_pilot.harness.tool_registry import ToolRegistry, ToolSpec
         from core.agent_pilot.harness.hooks import HookRegistry
         from core.agent_pilot.harness.permissions import PermissionGate
         from core.agent_pilot.planner import Plan, PlanStep
@@ -124,11 +123,11 @@ class TestIntentToDeliveryPipeline:
         )
 
         mock_registry = ToolRegistry()
-        mock_registry.register(
-            "mentor.summarize",
-            lambda step, ctx: {"summary": "test summary"},
+        mock_registry.register(ToolSpec(
+            name="mentor.summarize",
             description="mock summarize",
-        )
+            fn=lambda args, ctx: {"summary": "test summary"},
+        ))
 
         orchestrator = ConversationOrchestrator(
             tools=mock_registry,
@@ -191,10 +190,14 @@ class TestAPIContract:
         from fastapi.testclient import TestClient
 
         client = TestClient(app)
+        # Switch to demo mode to avoid startup state dependency
+        client.get("/demo")
         resp = client.get("/api/overview")
         assert resp.status_code == 200
         data = resp.json()
         assert "decisions_today" in data or "mode" in data
+        # Reset
+        client.get("/live")
 
     def test_demo_mode_toggle(self):
         from dashboard.server import app

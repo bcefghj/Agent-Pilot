@@ -1,4 +1,4 @@
-# LarkMentor v2 升级部署手册
+# Agent-Pilot v2 升级部署手册
 
 > 从 v1 升级到 v2（Claude Code 7 支柱 + 8 层栈补完 + Recovery Card）
 > 阿里云 2C2G 环境
@@ -31,14 +31,14 @@ PYTHONPATH=. pytest -q  # 必须 173+ passed
 | # | 改动 | 影响范围 | 回滚复杂度 |
 |---|---|---|---|
 | 1 | 新增 core/runtime/ 4 文件 | 仅新增 | 删目录即可 |
-| 2 | event_handler 切到 v3 | 主链路 | 设环境变量 LARKMENTOR_USE_V3_MAIN_CHAIN=0 |
-| 3 | classifier 调 KB（待 step11 已做注入）| 6 维分类 | 可关 LARKMENTOR_AUTO_INJECT_MEMORY=0 |
+| 2 | event_handler 切到 v3 | 主链路 | 设环境变量 AGENT_PILOT_USE_V3_MAIN_CHAIN=0 |
+| 3 | classifier 调 KB（待 step11 已做注入）| 6 维分类 | 可关 AGENT_PILOT_AUTO_INJECT_MEMORY=0 |
 | 4 | 新增 recovery_card.py | 仅新增 | 不调用即可 |
 | 5 | 补完 KeywordDenylist/RateLimiter/ToolSandbox | 安全栈 | 仅作用于 v3 主链路 |
 | 6 | user_state 加 fcntl + atomic | 持久化 | 兼容旧文件 |
 | 7 | mentor 4 模块 → SkillLoader 注册 | runtime | 调 register_all 才生效 |
 | 8 | MCP 加 4 新工具 | MCP 接口 | 不调用即可 |
-| 9 | LLM 调用加 6 级 memory 注入 | 全 LLM 调用 | 关 LARKMENTOR_AUTO_INJECT_MEMORY=0 |
+| 9 | LLM 调用加 6 级 memory 注入 | 全 LLM 调用 | 关 AGENT_PILOT_AUTO_INJECT_MEMORY=0 |
 
 **关键**：所有改动**默认开启**但**可一键关闭**——通过环境变量。
 
@@ -114,10 +114,10 @@ systemctl disable larkmentor_v1-bot
 
 ```bash
 # /etc/systemd/system/larkmentor_v2-bot.service.env
-LARKMENTOR_USE_V3_MAIN_CHAIN=1     # 默认 1，走 v3 主链路。设 0 则回 v1 行为
-LARKMENTOR_AUTO_INJECT_MEMORY=1    # 默认 1，自动注入 6 级 memory。设 0 则关闭
-LARKMENTOR_RECOVERY_CARD_ENABLED=1 # 默认 1（待加，本期 always on）
-LARKMENTOR_RATE_LIMIT_QPM=60       # 默认 60 QPM/user
+AGENT_PILOT_USE_V3_MAIN_CHAIN=1     # 默认 1，走 v3 主链路。设 0 则回 v1 行为
+AGENT_PILOT_AUTO_INJECT_MEMORY=1    # 默认 1，自动注入 6 级 memory。设 0 则关闭
+AGENT_PILOT_RECOVERY_CARD_ENABLED=1 # 默认 1（待加，本期 always on）
+AGENT_PILOT_RATE_LIMIT_QPM=60       # 默认 60 QPM/user
 ```
 
 ---
@@ -152,7 +152,7 @@ LARKMENTOR_RATE_LIMIT_QPM=60       # 默认 60 QPM/user
 | 6 级 memory 未注入 | data/flow_memory_md/ 没文件 | 创建 enterprise.md（哪怕空文件）|
 | Recovery Card 不弹 | focus 期间无 P0/P1/P2 | 正常（设计）|
 | MCP classify_readonly 报 user_not_found | 错误期望（已修复）| 自动创建 user |
-| RateLimit 误伤 | QPM 太低 | 调 LARKMENTOR_RATE_LIMIT_QPM=120 |
+| RateLimit 误伤 | QPM 太低 | 调 AGENT_PILOT_RATE_LIMIT_QPM=120 |
 
 ---
 

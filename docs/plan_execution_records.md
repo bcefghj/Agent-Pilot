@@ -1,6 +1,6 @@
 # Agent-Pilot 计划执行记录
 
-> **LarkMentor v2 Agent-Pilot 所有执行计划的详细记录**  
+> **Agent-Pilot v2 Agent-Pilot 所有执行计划的详细记录**  
 > 包含完整的步骤分解、执行状态、产物链接和技术细节
 
 ---

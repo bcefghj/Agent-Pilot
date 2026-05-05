@@ -13,7 +13,7 @@
 | # | 项目 | 状态 | 证据 |
 |---|---|---|---|
 | E1 | 阿里云 2C2G 服务器可部署 | ✅ | `deploy/deploy_v3.sh` v6 已有 |
-| E2 | systemd × 3 服务模板 | ✅ | `deploy/` (larkmentor/dashboard/mcp) |
+| E2 | systemd × 3 服务模板 | ✅ | `deploy/` (agent-pilot/dashboard/mcp) |
 | E3 | smoke_test_v2.sh 14 项 | ✅ | `deploy/smoke_test_v2.sh` |
 | E4 | 失败自动 rollback (< 60s) | ✅ | `deploy/rollback.sh` |
 | E5 | nginx 反代配置示例 | ✅ | README §部署 |

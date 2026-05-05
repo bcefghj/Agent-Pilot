@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MEMORY_DIR = ROOT / "data" / "flow_memory_md"
 MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 
-logger = logging.getLogger("flowguard.memory.md")
+logger = logging.getLogger("agent_pilot.memory.md")
 
 
 TIER_ORDER = ["enterprise", "workspace", "department", "group", "user", "session"]

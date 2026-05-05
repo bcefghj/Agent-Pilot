@@ -4,7 +4,7 @@
 时你可以随口打出的 6 张王炸。每张都是 10 秒以内可展示、不依赖外网。
 
 ## 1. `/context` — 看见 Agent 的大脑
-> 「LarkMentor，把你现在的 context 给我看一眼」
+> 「Agent-Pilot，把你现在的 context 给我看一眼」
 
 IM 输入 `/context` → 返回：
 - 当前挂载工具数（含 MCP 导入的远程工具）

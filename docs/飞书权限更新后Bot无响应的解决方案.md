@@ -1,7 +1,7 @@
 # 飞书权限更新后 Bot 无响应解决方案
 
 > **问题**：在飞书开放平台添加权限并发布新版本后，机器人没有更新或无响应  
-> **适用场景**：LarkMentor Agent-Pilot v2 权限配置
+> **适用场景**：Agent-Pilot Agent-Pilot v2 权限配置
 
 ---
 
@@ -62,7 +62,7 @@
 # 连接服务器
 ssh root@118.178.242.26
 
-# 重启 LarkMentor 服务
+# 重启 Agent-Pilot 服务
 sudo systemctl restart larkmentor
 
 # 检查服务状态
@@ -210,7 +210,7 @@ grep -i "success\|created\|generated" /var/log/larkmentor.log
 
 ```bash
 #!/bin/bash
-echo "=== LarkMentor Agent-Pilot 权限验证 ==="
+echo "=== Agent-Pilot Agent-Pilot 权限验证 ==="
 
 echo "1. 检查服务状态..."
 systemctl status larkmentor --no-pager

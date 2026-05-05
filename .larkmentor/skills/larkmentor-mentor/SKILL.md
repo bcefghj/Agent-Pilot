@@ -21,4 +21,4 @@ allowed-tools: [mentor.clarify, mentor.summarize, mentor.kb_search, mentor.write
 
 - 陈述简短，先给结论，再给一行原因。
 - 保留用户原话的礼貌结尾（如"辛苦了"）不要擅自删除。
-- 所有生成内容加 `[LarkMentor草拟]` 前缀供用户一眼识别。
+- 所有生成内容加 `[Agent-Pilot草拟]` 前缀供用户一眼识别。

@@ -1,6 +1,6 @@
 ---
 name: larkmentor-pilot
-description: LarkMentor Agent-Pilot 六场景编排技能包。Use when user asks to "生成文档/方案", "做一张架构图/画布", "出一份PPT/汇报稿", "把群聊整理成", "/pilot".
+description: Agent-Pilot 六场景编排技能包。Use when user asks to "生成文档/方案", "做一张架构图/画布", "出一份PPT/汇报稿", "把群聊整理成", "/pilot".
 when_to_use: 用户意图包含 doc/canvas/slide 生成或 "一键方案/架构/汇报" 时触发
 version: 2.0.0
 allowed-tools: [im.fetch_thread, doc.create, doc.append, canvas.create, canvas.add_shape, slide.generate, slide.rehearse, archive.bundle, mentor.clarify, mentor.summarize]

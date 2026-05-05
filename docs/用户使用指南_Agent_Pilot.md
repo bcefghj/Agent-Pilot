@@ -1,4 +1,4 @@
-# LarkMentor Agent-Pilot 用户使用指南
+# Agent-Pilot Agent-Pilot 用户使用指南
 
 > **一句话介绍**：在飞书 IM 中发送 `/pilot <你的需求>`，Agent 自动生成产品方案文档 + 架构图 + 评审 PPT
 
@@ -8,7 +8,7 @@
 
 ### 第1步：添加机器人
 
-在飞书中搜索 **`LarkMentor`**，点击添加为好友
+在飞书中搜索 **`Agent-Pilot`**，点击添加为好友
 
 ### 第2步：发送指令
 
@@ -133,7 +133,7 @@
 
 在群聊中 @机器人 + `/pilot` 指令：
 ```
-@LarkMentor /pilot 整理今天的讨论
+@Agent-Pilot /pilot 整理今天的讨论
 ```
 
 ### 2. 指定具体需求
@@ -274,7 +274,7 @@
 
 **在群聊讨论后执行**：
 ```
-@LarkMentor /pilot 整理今天关于产品定位的讨论
+@Agent-Pilot /pilot 整理今天关于产品定位的讨论
 ```
 Agent 会自动拉取群聊历史作为上下文
 
@@ -305,7 +305,7 @@ Agent 会自动拉取群聊历史作为上下文
 
 **Bot**：
 ```
-🤖 LarkMentor Agent-Pilot 使用指南
+🤖 Agent-Pilot Agent-Pilot 使用指南
 
 核心指令：
 /pilot <需求描述> - 自动生成文档/PPT/画布
@@ -404,5 +404,5 @@ Agent 可以智能总结复杂讨论：
 - **示例体验**：http://118.178.242.26/dashboard/pilot
 - **问题反馈**：在飞书中私聊 Bot 说明问题
 
-**当前版本**：LarkMentor Agent-Pilot v2.0
+**当前版本**：Agent-Pilot Agent-Pilot v2.0
 **更新时间**：2026-04-24

@@ -1,4 +1,4 @@
-# LarkMentor v4 · 10 分钟 Demo 逐帧台本
+# Agent-Pilot v4 · 10 分钟 Demo 逐帧台本
 
 > 每一帧都是真跑通的，没有剪辑跳步空间。  
 > 评委看到的是**对标 Claude Code 的统一 Agent Harness**，不是三个引擎拼凑。
@@ -18,7 +18,7 @@
 **画面**：黑底 fade-in → logo → 两段文字。
 
 **旁白**：
-> 你好。这是 LarkMentor v4。
+> 你好。这是 Agent-Pilot v4。
 > 对标 Claude Code 的 98.4% 基础设施 vs 1.6% AI。
 > 代码从 v3 的 6225 行 → v4 净 +3500 行，但 Anthropic 官方数据：**多 agent 协同相比单 agent 质量提升 90.2%**。
 > 接下来 10 分钟，完美兑现赛题 6 场景 + 4 加分项 + 3 评委独家 wow。
@@ -30,7 +30,7 @@
 **布局**：左 1/2 屏飞书桌面客户端，右 1/2 屏 dashboard_v4.html 实时可视化。
 
 **操作**：
-1. 飞书群 @LarkMentor 语音发送：  
+1. 飞书群 @Agent-Pilot 语音发送：  
    「把本周项目群讨论整理成 **产品方案 + 架构图 + 评审 PPT + 归档 Wiki**」
 2. 语音 → ASR → 意图识别 → **dashboard 右侧实时显示 9 步 pipeline 逐步高亮**（Settings → State → Context → Compaction → Model → Dispatch → Permission → Execute → Stop）
 3. 飞书群里 Card 2.0 **流式打字机**（cardkit）实时显示：  

@@ -12,7 +12,7 @@ allowed-tools: [shield.classify, shield.auto_reply, shield.reaction_ack, shield.
 
 1. `shield.classify` 对一条或一批消息打分（0-100 紧急度）。
 2. 分数 ≥ 80 且发件人在 VIP 白名单 → `shield.urgent_app` 推送到飞书小程序弹窗。
-3. 分数 60-79 → `shield.auto_reply` 用模板代回复（带 [LarkMentor代回复] 标签）。
+3. 分数 60-79 → `shield.auto_reply` 用模板代回复（带 [Agent-Pilot代回复] 标签）。
 4. 分数 < 60 → 只做 `shield.reaction_ack`（👀 表情确认看过）。
 
 ## 不要做

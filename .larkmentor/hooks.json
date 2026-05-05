@@ -1,6 +1,6 @@
 {
   "session_start": [
-    {"type": "inject_memory", "file": "LARKMENTOR.md"}
+    {"type": "inject_memory", "file": "AGENT_PILOT.md"}
   ],
   "pre_tool_use": [
     {"type": "log_audit", "path": "~/.larkmentor/audit.jsonl"}

@@ -21,7 +21,7 @@ from llm.prompts import MENTOR_TASK_CLARIFY_PROMPT
 
 from . import knowledge_base as kb
 
-logger = logging.getLogger("flowguard.mentor.task")
+logger = logging.getLogger("agent_pilot.mentor.task")
 
 
 @dataclass
