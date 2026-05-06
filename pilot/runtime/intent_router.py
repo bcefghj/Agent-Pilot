@@ -188,9 +188,20 @@ class CooldownStore:
 
 
 def _detect_command(text: str) -> CommandKind | None:
+    """命令检测：纯命令词、/pilot 前缀的命令词、status/help 别名都算。"""
     norm = text.strip()
     if not norm:
         return None
+    # /pilot 帮助 / @pilot 状态 → 去前缀再匹配
+    lower = norm.lower()
+    for prefix in EXPLICIT_PREFIXES:
+        if lower.startswith(prefix):
+            stripped = norm[len(prefix):].lstrip(" ：:、,").strip()
+            if stripped and stripped in COMMAND_WORDS:
+                return COMMAND_WORDS[stripped]
+            if stripped and stripped.lower() in COMMAND_WORDS:
+                return COMMAND_WORDS[stripped.lower()]
+            break
     if norm in COMMAND_WORDS:
         return COMMAND_WORDS[norm]
     return COMMAND_WORDS.get(norm.lower())
@@ -269,9 +280,9 @@ def _has_topic(text: str) -> bool:
     for kw in (*STRONG_FORM_WORDS, *WEAK_FORM_WORDS, *VERB_WORDS, *FILLER_WORDS):
         residual = residual.replace(kw, "")
     residual = re.sub(r"[，。、,.;;:?？!！\s]+", "", residual)
-    if len(residual) >= 3:
+    if len(residual) >= 2:
         return True
-    return len(text) >= 14
+    return len(text) >= 12
 
 
 def _extract_theme(text: str) -> str:
