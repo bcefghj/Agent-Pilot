@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -187,21 +188,30 @@ async def _generate_markdown(*, intent: str, _ctx: dict[str, Any] | None) -> str
 5. 直接输出 markdown 正文
 """
         client = default_client()
-        result = await client.chat(
-            system="你是 Agent-Pilot 的资深写作员，擅长结构化方案与汇报文档。",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.5,
-            max_tokens=4096,
+        result = await asyncio.wait_for(
+            client.chat(
+                system="你是 Agent-Pilot 的资深写作员，擅长结构化方案与汇报文档。",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.5,
+                max_tokens=4096,
+            ),
+            timeout=60.0,
         )
-        # 抽出 text；mock 返回或太短的内容走 fallback
         if result.get("raw", {}).get("_mock"):
             return _fallback_markdown(intent)
-        for block in result.get("content", []):
-            if isinstance(block, dict) and block.get("type") == "text":
-                t = block.get("text", "").strip()
-                if len(t) >= 200:
-                    return t
-        return result.get("text", "") if len(result.get("text", "")) >= 200 else _fallback_markdown(intent)
+        text = result.get("text", "")
+        if not text:
+            for block in result.get("content", []):
+                if isinstance(block, dict) and block.get("type") == "text":
+                    t = block.get("text", "").strip()
+                    if len(t) >= 200:
+                        return t
+        if len(text) >= 200:
+            return text
+        return _fallback_markdown(intent)
+    except asyncio.TimeoutError:
+        logger.warning("doc.append LLM timeout (60s), using fallback")
+        return _fallback_markdown(intent)
     except Exception as e:
         logger.warning("doc.append LLM failed, using fallback: %s", e)
         return _fallback_markdown(intent)

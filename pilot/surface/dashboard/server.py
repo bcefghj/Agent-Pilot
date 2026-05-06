@@ -92,9 +92,16 @@ def create_app():
     # ── API ──
     @app.get("/api/sessions")
     async def list_sessions(limit: int = Query(20, ge=1, le=100)):
-        from pilot.runtime.checkpoint import list_sessions
+        from pilot.runtime.checkpoint import list_sessions as list_checkpoint_sessions
+        from pilot.context.event_log import list_sessions as list_event_sessions
 
-        return list_sessions(limit=limit)
+        sessions = list_checkpoint_sessions(limit=limit)
+        event_ids = list_event_sessions(limit=limit)
+        seen = {s.get("session_id") for s in sessions if isinstance(s, dict)}
+        for eid in event_ids:
+            if eid not in seen:
+                sessions.append({"session_id": eid, "mode": "plan", "source": "events"})
+        return sessions[:limit]
 
     @app.get("/api/sessions/{session_id}")
     async def session_detail(session_id: str):
