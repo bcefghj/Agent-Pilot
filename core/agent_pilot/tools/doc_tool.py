@@ -125,8 +125,7 @@ def _try_create_feishu_doc(title: str) -> Dict[str, Any]:
 def _try_append_feishu_blocks(doc_token: str, markdown: str) -> int:
     """Convert markdown to a flat list of Feishu Docx blocks and append.
 
-    We support: `# h1`, `## h2`, `- bullet`, normal paragraph, ```code```
-    This is enough for the demo; full markdown parsing is out of scope.
+    We support: `# h1`, `## h2`, `- bullet`, normal paragraph.
     """
     try:
         from lark_oapi.api.docx.v1 import (
@@ -139,32 +138,35 @@ def _try_append_feishu_blocks(doc_token: str, markdown: str) -> int:
         client = get_client()
         blocks = _markdown_to_blocks(markdown)
         if not blocks:
+            logger.warning("doc.append: _markdown_to_blocks returned 0 blocks for %d chars of markdown", len(markdown))
             return 0
+        logger.info("doc.append: sending %d blocks to Feishu doc %s", len(blocks), doc_token)
         req = (
             CreateDocumentBlockChildrenRequest.builder()
             .document_id(doc_token)
-            .block_id(doc_token)  # append at root
+            .block_id(doc_token)
             .request_body(CreateDocumentBlockChildrenRequestBody.builder().children(blocks).build())
             .build()
         )
         resp = client.docx.v1.document_block_children.create(req)
         if resp.success():
+            logger.info("doc.append: successfully wrote %d blocks to Feishu doc %s", len(blocks), doc_token)
             return len(blocks)
         logger.warning(
             "doc.append feishu api failed code=%s msg=%s", getattr(resp, "code", "?"), getattr(resp, "msg", "?")
         )
         return 0
     except Exception as e:
-        logger.debug("doc.append feishu fallback: %s", e)
+        logger.warning("doc.append feishu exception: %s", e)
         return 0
 
 
 def _markdown_to_blocks(md: str) -> List[Any]:
-    """Minimal markdown → Docx Block converter. Lark SDK types are built lazily."""
+    """Minimal markdown → Docx Block converter using lark_oapi builder pattern."""
     try:
         from lark_oapi.api.docx.v1 import Block, Text, TextElement, TextRun
     except ImportError:
-        return []  # lark_oapi docx types not available
+        return []
 
     blocks: List[Any] = []
     for raw in md.splitlines():
@@ -173,22 +175,23 @@ def _markdown_to_blocks(md: str) -> List[Any]:
             continue
 
         def _text_block(text: str, block_type: int) -> Any:
-            run = TextRun(content=text)
-            element = TextElement(text_run=run)
-            txt = Text(elements=[element])
+            run = TextRun.builder().content(text).build()
+            element = TextElement.builder().text_run(run).build()
+            txt = Text.builder().elements([element]).build()
             # block_type: 2=text, 3=h1, 4=h2, 5=h3, 12=bullet
             try:
+                bb = Block.builder().block_type(block_type)
                 if block_type == 3:
-                    return Block(block_type=block_type, heading1=txt)
+                    return bb.heading1(txt).build()
                 if block_type == 4:
-                    return Block(block_type=block_type, heading2=txt)
+                    return bb.heading2(txt).build()
                 if block_type == 5:
-                    return Block(block_type=block_type, heading3=txt)
+                    return bb.heading3(txt).build()
                 if block_type == 12:
-                    return Block(block_type=block_type, bullet=txt)
-                return Block(block_type=block_type, text=txt)
+                    return bb.bullet(txt).build()
+                return bb.text(txt).build()
             except Exception:
-                return Block(block_type=2, text=txt)  # fallback to plain text block on any block_type mismatch
+                return Block.builder().block_type(2).text(txt).build()
 
         if line.startswith("# "):
             blocks.append(_text_block(line[2:], 3))
@@ -205,7 +208,12 @@ def _markdown_to_blocks(md: str) -> List[Any]:
 
 def _default_markdown_from_intent(ctx: Dict[str, Any]) -> str:
     plan_id = ctx.get("plan_id", "")
-    intent = ctx.get("description", "") or ctx.get("intent", "") or plan_id
+    intent = (
+        ctx.get("original_intent", "")
+        or ctx.get("intent", "")
+        or ctx.get("description", "")
+        or plan_id
+    )
     step_results: Dict[str, Dict[str, Any]] = ctx.get("step_results") or {}
 
     thread_msgs = []

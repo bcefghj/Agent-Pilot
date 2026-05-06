@@ -182,8 +182,27 @@ def _do_handle(data):
         )
         return
 
-    # Route: Not focusing → try PilotRouter for natural intent detection
+    # Route: Not focusing → try natural language intent detection + auto-launch
     if not user.is_focusing():
+        # First try rule-based intent detection for direct task launch
+        try:
+            from core.agent_pilot.application.intent_detector import detect_rules, rule_passes
+
+            class _QuickMsg:
+                def __init__(self, t, sid):
+                    self.text = t
+                    self.sender_open_id = sid
+
+            hit = detect_rules([_QuickMsg(text, open_id)])
+            if rule_passes(hit):
+                # Auto-launch task like /pilot
+                from bot.handlers.pilot import handle_pilot_command
+                if handle_pilot_command("pilot_run", {"intent": text}, open_id, user, text):
+                    return
+        except Exception as e:
+            logger.debug("Auto-launch intent detection skipped: %s", e)
+
+        # Fallback: try PilotRouter for more nuanced detection
         try:
             from bot.pilot_router import default_pilot_router
 
@@ -199,7 +218,7 @@ def _do_handle(data):
         except Exception as e:
             logger.debug("PilotRouter DM routing skipped: %s", e)
 
-        # NOT_INTENT: try LLM conversational reply before falling back to welcome card
+        # NOT_INTENT: LLM conversational reply
         try:
             from llm.llm_client import chat as _llm_chat
 

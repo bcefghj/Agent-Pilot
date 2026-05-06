@@ -118,6 +118,7 @@ def _run_and_persist(plan: Plan) -> None:
             "plan_id": plan.plan_id,
             "user_open_id": plan.user_open_id,
             "auto_confirm": True,
+            "original_intent": plan.intent,
         }
         ctx.update(plan.meta or {})
         orch.run(plan, context=ctx)
