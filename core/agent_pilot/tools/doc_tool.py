@@ -289,6 +289,11 @@ def _generate_outline(intent: str, context: str) -> List[Dict[str, Any]]:
             m = _re.search(r"```(?:json)?\s*([\s\S]+?)```", txt)
             if m:
                 txt = m.group(1).strip()
+        m_arr = _re.search(r"\[[\s\S]*\]", txt)
+        if m_arr:
+            txt = m_arr.group(0)
+        txt = _re.sub(r",\s*([}\]])", r"\1", txt)
+        txt = txt.replace("'", '"')
         arr = _json.loads(txt)
         if isinstance(arr, list) and len(arr) >= 3:
             return [

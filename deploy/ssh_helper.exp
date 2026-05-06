@@ -1,0 +1,36 @@
+#!/usr/bin/expect -f
+# SSH 自动化脚本，用于替代 sshpass
+
+set timeout 30
+set server_ip "118.178.242.26"
+set server_user "root"
+set server_password "bcefghj@Github666"
+
+if {[llength $argv] == 0} {
+    puts "用法: ./ssh_helper.exp \"命令\""
+    exit 1
+}
+
+set command [lindex $argv 0]
+
+spawn ssh -o StrictHostKeyChecking=no $server_user@$server_ip $command
+
+expect {
+    "password:" {
+        send "$server_password\r"
+        expect eof
+    }
+    "Password:" {
+        send "$server_password\r"
+        expect eof
+    }
+    eof {
+        # 已经连接，无需密码
+    }
+    timeout {
+        puts "连接超时"
+        exit 1
+    }
+}
+
+wait
