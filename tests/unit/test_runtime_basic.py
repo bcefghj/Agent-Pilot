@@ -60,41 +60,53 @@ async def test_intent_explicit_pilot():
 
 
 @pytest.mark.asyncio
-async def test_intent_not_intent():
+async def test_intent_chat_not_silent_for_smalltalk():
+    """V1.5 业务变更：闲聊不沉默，给友好回复（绝不沉默原则）."""
     router = IntentRouter()
     msg = ChatMessage(sender_open_id="u1", text="今天天气真好啊", chat_id="c1")
     r = await router.detect([msg])
-    assert r.verdict == IntentVerdict.NOT_INTENT
+    assert r.verdict == IntentVerdict.CHAT
+    assert r.chat_reply  # 一定有回复文本
 
 
 @pytest.mark.asyncio
 async def test_intent_clarify_when_no_llm():
+    """信息不足且无 LLM 判定时走 NEEDS_CLARIFY，避免空启 plan."""
     router = IntentRouter()
     msg = ChatMessage(sender_open_id="u1", text="帮我做个 PPT", chat_id="c1")
     r = await router.detect([msg])
-    # 没 LLM 判断器，规则命中 → NEEDS_CLARIFY
     assert r.verdict == IntentVerdict.NEEDS_CLARIFY
     assert len(r.clarify_questions) >= 1
 
 
 @pytest.mark.asyncio
-async def test_intent_ready_with_full_info():
-    async def fake_llm(text, history):
-        return LLMJudgement(
-            is_task=True,
-            task_type="report",
-            goal="AI Agent 发展趋势",
-            resources=["文档"],
-            next_step="生成文档",
-            confidence=0.9,
-        )
-
-    router = IntentRouter(llm_judge=fake_llm)
+async def test_intent_ready_short_circuit_when_info_rich():
+    """信息充分（form 词 + 主题 + 长度）时闸门 3 短路 READY，不必走 LLM."""
+    router = IntentRouter()  # 不注入 LLM 也应 READY
     msg = ChatMessage(
         sender_open_id="u1",
         text="帮我写一份关于 AI Agent 发展趋势的报告，给老板看",
         chat_id="c1",
     )
+    r = await router.detect([msg])
+    assert r.verdict == IntentVerdict.READY
+
+
+@pytest.mark.asyncio
+async def test_intent_llm_judge_overrides_when_short_text():
+    """短文本 + 弱信号 → 走闸门 4，LLM 给出 ready 直接 READY."""
+    async def fake_llm(text, history):
+        return LLMJudgement(
+            verdict="ready",
+            is_task=True,
+            task_type="report",
+            goal="AI Agent",
+            summary="AI Agent 报告",
+            confidence=0.9,
+        )
+
+    router = IntentRouter(llm_judge=fake_llm)
+    msg = ChatMessage(sender_open_id="u1", text="搞个东西", chat_id="c1")
     r = await router.detect([msg])
     assert r.verdict == IntentVerdict.READY
     assert r.llm_judgement is not None
