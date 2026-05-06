@@ -30,6 +30,8 @@ def test_session_create():
 def test_task_state_transition():
     t = Task(intent="帮我写个文档")
     assert t.state == TaskState.SUGGESTED
+    # V1.5：必须按 LEGAL_TRANSITIONS 走合法路径
+    t.transition(TaskState.ASSIGNED)
     t.transition(TaskState.PLANNING)
     assert t.state == TaskState.PLANNING
     t.lock_owner("ou_xxx")
