@@ -1,12 +1,11 @@
-"""ResearchAgent — 为每个章节联网搜索数据.
+"""ResearchAgent — 利用 MiniMax 原生联网能力为大纲章节搜索数据.
 
-利用 MiniMax 的 tool calling（web_search function）为大纲中每个章节
-搜索相关数据与案例，汇总到 state["research_results"]。
+MiniMax M2.7 Token Plan 自带联网搜索能力，模型在生成回复时会自动
+查询互联网获取实时信息。无需任何第三方搜索引擎（DDG/Bing等）。
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -15,60 +14,36 @@ from pilot.agents.base import AgentState, BaseAgent
 logger = logging.getLogger("pilot.agents.researcher")
 
 _RESEARCH_SYSTEM_PROMPT = """\
-你是 Agent-Pilot 的研究员，擅长联网搜索最新信息来支撑文档内容。
-你拥有 web_search 工具，请为每个章节搜索 1-2 个关键词，获取真实数据、案例和来源。
+你是 Agent-Pilot 的研究员。你拥有联网搜索能力，请充分利用。
+任务：为用户文档的每个章节搜索最新的真实数据。
 
-搜索策略：
-1. 根据章节标题和要点提炼搜索关键词（中文或英文均可）
-2. 优先搜索：行业数据、权威报告、最新政策、典型案例
-3. 每次搜索后整理要点，标注来源 URL
+要求：
+1. 必须联网搜索，获取 2024-2026 年最新数据
+2. 每个章节需要包含：具体数字（市场规模、增长率等）、权威来源、真实案例
+3. 所有数据必须标注来源（报告名称、发布机构、URL等）
+4. 拒绝编造数据，搜索不到就明确说明
 
-回复格式（纯 JSON 数组）：
+输出格式（纯 JSON 数组，不要其他内容）：
 [
-  {
-    "heading": "章节标题",
-    "search_query": "搜索关键词",
-    "findings": [
-      {"title": "来源标题", "url": "来源URL", "snippet": "关键摘要 50-100 字"}
-    ]
-  }
+  {"heading": "章节标题", "data": "搜索到的关键数据（100-200字，含具体数字和事实）", "source": "数据来源（机构/报告名）"}
 ]
 """
 
-WEB_SEARCH_TOOL: dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": "联网搜索最新信息",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "搜索关键词",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-}
-
 
 class ResearchAgent(BaseAgent):
-    """研究员 Agent：为大纲章节联网搜索数据。"""
+    """研究员 Agent：利用 MiniMax 原生联网搜索为大纲章节获取真实数据。"""
 
     name = "research_agent"
     role = "研究员"
     system_prompt = _RESEARCH_SYSTEM_PROMPT
 
     async def execute(self, state: AgentState) -> AgentState:
-        """用 MiniMax M2.7 的 tool calling 联网搜索。
+        """调用 MiniMax 联网搜索，为每个章节获取真实数据。
 
-        流程：
-        1. 让 MiniMax 决定要搜什么（tool_calls: web_search）
-        2. 我们执行搜索（DDG+Bing）
-        3. 把搜索结果 feed back 给 MiniMax
-        4. MiniMax 整理输出结构化研究报告
+        MiniMax Token Plan 模型自带联网搜索能力：
+        - 在 system prompt 中要求联网搜索
+        - 模型会自动搜索互联网并返回带来源的数据
+        - 无需 DDG/Bing 等第三方搜索引擎
         """
         outline = state.get("outline", [])
         intent = state.get("intent", "")
@@ -77,131 +52,53 @@ class ResearchAgent(BaseAgent):
             state["research_results"] = []
             return state
 
-        from pilot.llm.client import default_client
-        from pilot.llm.web_search import default_searcher
-
-        client = default_client()
-        searcher = default_searcher()
-
         sections_desc = "\n".join(
             f"- {s.get('heading', '')}: {', '.join(s.get('key_points', []))}"
             for s in outline if isinstance(s, dict)
         )
 
-        messages = [
-            {"role": "user", "content": f"""请为以下文档大纲搜索支撑数据。
+        prompt = f"""请联网搜索以下文档大纲每个章节所需的真实数据。
 
 用户意图：{intent}
+
 大纲章节：
 {sections_desc}
 
-请对每个章节调用 web_search 搜索 1-2 个关键词，获取行业数据、案例和权威来源。"""}
-        ]
+请对每个章节进行联网搜索，获取：
+- 最新行业数据（市场规模、增长率、用户数等具体数字）
+- 权威报告或研究（Gartner、IDC、麦肯锡等）
+- 具体企业案例或产品数据
+- 信息来源标注
 
-        # Step 1: 让 MiniMax 决定搜索什么
-        r1 = await client.chat(
-            system=self.system_prompt,
-            messages=messages,
-            tools=[WEB_SEARCH_TOOL],
-            temperature=0.3,
-            max_tokens=2048,
-        )
+输出 JSON 数组：
+[
+  {{"heading": "章节标题", "data": "搜索到的关键数据和事实（100-200字，含具体数字）", "source": "数据来源"}}
+]"""
 
-        tool_calls = r1.get("tool_calls") or []
-        raw_tool_calls = r1.get("raw", {}).get("choices", [{}])[0].get("message", {}).get("tool_calls") or []
+        result = await self._call_llm(prompt, temperature=0.3, max_tokens=4096)
 
-        # Step 2: 执行每个搜索
-        search_results_map: dict[str, list[dict]] = {}
-        for tc in (raw_tool_calls or tool_calls):
-            fn = tc.get("function", {})
-            if fn.get("name") == "web_search":
-                try:
-                    args = json.loads(fn.get("arguments", "{}")) if isinstance(fn.get("arguments"), str) else fn.get("arguments", {})
-                except Exception:
-                    args = {}
-                query = args.get("query", "")
-                if query:
-                    try:
-                        results = await searcher.search(query, k=3)
-                        search_results_map[query] = results
-                        logger.info("ResearchAgent searched '%s' → %d results", query, len(results))
-                    except Exception as e:
-                        logger.warning("ResearchAgent search failed for '%s': %s", query, e)
-                        search_results_map[query] = []
+        research = self._parse_research(result, outline)
+        state["research_results"] = research
 
-        # Step 3: 把搜索结果整理为每个章节的 research
-        research: list[dict[str, Any]] = []
-        all_findings = []
-        for results in search_results_map.values():
-            all_findings.extend(results)
+        logger.info("ResearchAgent: %d sections researched via MiniMax", len(research))
+        return state
 
+    def _parse_research(self, text: str, outline: list) -> list[dict[str, Any]]:
+        """解析 MiniMax 返回的研究结果 JSON。"""
+        from pilot.llm.safe_json import safe_json_parse
+
+        parsed = safe_json_parse(text, expected_type=list, debug_label="research")
+        if parsed:
+            return parsed
+
+        research = []
         for section in outline:
             if not isinstance(section, dict):
                 continue
             heading = section.get("heading", "")
             research.append({
                 "heading": heading,
-                "search_query": heading,
-                "findings": all_findings[:3] if all_findings else [
-                    {"title": f"{heading}", "url": "", "snippet": "搜索未返回结果"}
-                ],
+                "data": text[:200] if text else f"{heading} 相关数据",
+                "source": "MiniMax 联网搜索",
             })
-            all_findings = all_findings[3:] if len(all_findings) > 3 else all_findings
-
-        state["research_results"] = research
-
-        logger.info(
-            "ResearchAgent: %d sections, %d total search queries, %d findings",
-            len(research), len(search_results_map),
-            sum(len(r.get("findings", [])) for r in research),
-        )
-        return state
-
-    def _extract_research(
-        self, result: dict[str, Any], outline: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """从 LLM 回复中提取研究结果。
-
-        处理两种情况：
-        1. LLM 直接返回 JSON 结果
-        2. LLM 先调 web_search tool_call，再返回结果
-        """
-        from pilot.llm.safe_json import safe_json_parse
-
-        text = result.get("text", "")
-        if text:
-            parsed = safe_json_parse(text, expected_type=list, debug_label="research.results")
-            if parsed:
-                return parsed
-
-        tool_calls = result.get("tool_calls", [])
-        findings: list[dict[str, Any]] = []
-
-        for section in outline:
-            if not isinstance(section, dict):
-                continue
-            heading = section.get("heading", "")
-            section_findings: list[dict[str, str]] = []
-
-            for tc in tool_calls:
-                fn = tc.get("function", {}) or {}
-                if fn.get("name") == "web_search":
-                    try:
-                        args = json.loads(fn.get("arguments", "{}"))
-                    except Exception:
-                        args = {}
-                    section_findings.append({
-                        "title": f"搜索: {args.get('query', '')}",
-                        "url": "",
-                        "snippet": f"(web_search tool_call for: {args.get('query', '')})",
-                    })
-
-            findings.append({
-                "heading": heading,
-                "search_query": heading,
-                "findings": section_findings or [
-                    {"title": f"{heading} 相关资料", "url": "", "snippet": "待联网搜索补充"}
-                ],
-            })
-
-        return findings
+        return research

@@ -34,7 +34,7 @@ EXPOSED_TOOLS = {
     "doc.create": "创建飞书 Docx 文档",
     "doc.append": "向 Docx 追加 LLM 自动生成的 Markdown 内容",
     "slide.generate": "基于上游文档生成 .pptx 演示稿 + Slidev md + 演讲稿",
-    "web.search": "联网搜索（DDG + Bing CN 兜底）",
+    "web.search": "联网搜索（MiniMax 原生联网搜索）",
 }
 
 

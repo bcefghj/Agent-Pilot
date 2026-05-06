@@ -105,7 +105,7 @@ PLANNER_SYSTEM_PROMPT = """你是 Agent-Pilot 的规划器。
 
 可用工具:
 [内置]
-- web.search           : 联网搜索最新资料（DDG/Bing 兜底）。命中"最新/今年/趋势/进展"等时务必用作首步。
+- web.search           : 联网搜索最新资料（MiniMax 原生联网）。命中"最新/今年/趋势/进展"等时务必用作首步。
 - doc.create           : 创建飞书 Docx 文档（参数 title）
 - doc.append           : 往文档追加内容（参数 doc_token；markdown 留空由工具自动生成）
 - canvas.create        : 创建画布/白板（参数 title）；工具会基于上游 doc.append 自动设计架构图

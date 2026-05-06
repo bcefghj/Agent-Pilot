@@ -1,9 +1,7 @@
-"""V1.5 — web.search 与 media.tts 工具注册.
+"""V2.0 — web.search 与 media.tts 工具注册.
 
 设计取舍:
-  - 不实现 image / video / voice_clone / image_understand。这些 fast 时期挂了空壳，
-    没有真正可调通的下游 API；不做"假工具"。
-  - web.search 委托 pilot.llm.web_search.WebSearcher（DDG + Bing CN），不联 LLM。
+  - web.search 走 MiniMax 原生联网搜索（模型自带联网能力），不使用 DDG/Bing。
   - media.tts 走 MiniMax T2A（/v1/t2a_v2）。默认禁用（AGENT_PILOT_ENABLE_TTS=0），
     避免比赛环境意外消耗配额。
 """
@@ -27,7 +25,7 @@ logger = logging.getLogger("pilot.tool.web_media")
 def register_to(reg) -> None:
     reg.register(
         "web.search",
-        description="联网搜索（DuckDuckGo HTML 主路径 + Bing CN 兜底，无需 API key）",
+        description="联网搜索（MiniMax 原生联网搜索）",
         input_schema={
             "type": "object",
             "properties": {
@@ -58,14 +56,27 @@ def register_to(reg) -> None:
 
 
 async def web_search(*, query: str, k: int = 5, _ctx: dict[str, Any] | None = None) -> dict[str, Any]:
-    """调用 WebSearcher 抓 DDG/Bing 并返回 [{title,url,snippet}] 数组."""
-    from pilot.llm.web_search import default_searcher
+    """调用 MiniMax 原生联网搜索并返回结果。
+
+    MiniMax M2.7 模型自带联网能力，直接让模型搜索并返回结构化结果。
+    """
+    from pilot.llm.client import default_client
 
     started = time.monotonic()
     try:
-        results = await default_searcher().search(query, k=k)
+        client = default_client()
+        result = await client.chat(
+            system="你是一个搜索助手。请联网搜索用户的问题，返回最相关的搜索结果。"
+                   "输出格式：每条结果一行，格式为「标题 | URL | 摘要」。"
+                   f"返回前 {k} 条最相关结果。",
+            messages=[{"role": "user", "content": f"请搜索：{query}"}],
+            temperature=0.1,
+            max_tokens=2048,
+        )
+        text = result.get("text", "")
+        results = _parse_search_results(text, k)
     except Exception as e:
-        logger.warning("web.search failed: %s", e)
+        logger.warning("web.search (MiniMax) failed: %s", e)
         return {"ok": False, "query": query, "results": [], "error": str(e)[:200]}
 
     elapsed_ms = int((time.monotonic() - started) * 1000)
@@ -77,6 +88,33 @@ async def web_search(*, query: str, k: int = 5, _ctx: dict[str, Any] | None = No
         "count": len(results),
         "elapsed_ms": elapsed_ms,
     }
+
+
+def _parse_search_results(text: str, k: int = 5) -> list[dict[str, str]]:
+    """解析 MiniMax 返回的搜索结果文本。"""
+    results = []
+    for line in text.strip().split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("|")
+        if len(parts) >= 3:
+            results.append({
+                "title": parts[0].strip().lstrip("0123456789. -"),
+                "url": parts[1].strip(),
+                "snippet": parts[2].strip(),
+            })
+        elif len(parts) == 2:
+            results.append({
+                "title": parts[0].strip().lstrip("0123456789. -"),
+                "url": "",
+                "snippet": parts[1].strip(),
+            })
+        elif line:
+            results.append({"title": "", "url": "", "snippet": line})
+        if len(results) >= k:
+            break
+    return results
 
 
 async def media_tts(
