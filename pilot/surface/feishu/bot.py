@@ -194,11 +194,18 @@ def run() -> None:
         .build()
     )
 
+    # lark-oapi 不同版本 LogLevel 枚举不同，做兼容处理
+    log_level = None
+    for cand in ("WARNING", "WARN", "INFO", "ERROR"):
+        if hasattr(lark.LogLevel, cand):
+            log_level = getattr(lark.LogLevel, cand)
+            break
+
     cli = lark.ws.Client(
         os.getenv("FEISHU_APP_ID", ""),
         os.getenv("FEISHU_APP_SECRET", ""),
         event_handler=handler,
-        log_level=lark.LogLevel.WARN,
+        log_level=log_level,
     )
     logger.info("正在连接飞书长连接服务...")
     cli.start()
