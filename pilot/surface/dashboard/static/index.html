@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agent-Pilot V1 · 飞书 IM 中的 AI 主驾驶</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  @keyframes pulse-ring { 0% { transform: scale(.95); box-shadow: 0 0 0 0 rgba(59,130,246,.6); } 70% { transform: scale(1); box-shadow: 0 0 0 14px rgba(59,130,246,0); } 100% { transform: scale(.95); box-shadow: 0 0 0 0 rgba(59,130,246,0); } }
+  @keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Inter", sans-serif; background: #0a0e27; color: #e2e8f0; }
+  .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); }
+  .gradient-text { background: linear-gradient(135deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .float { animation: float 3s ease-in-out infinite; }
+  .pulse-ring { animation: pulse-ring 2s infinite; }
+  .shimmer { background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%); background-size: 1000px 100%; animation: shimmer 2.5s infinite; }
+  .grid-bg { background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.06) 1px, transparent 0); background-size: 40px 40px; }
+  .glow { box-shadow: 0 0 40px rgba(96,165,250,0.3); }
+</style>
+</head>
+<body class="grid-bg min-h-screen overflow-x-hidden">
+
+<!-- ================== Hero ================== -->
+<header class="relative max-w-7xl mx-auto px-6 pt-12 pb-8">
+  <nav class="flex justify-between items-center mb-16">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl float">🛫</div>
+      <span class="font-bold text-xl gradient-text">Agent-Pilot V1</span>
+    </div>
+    <div class="flex gap-6 text-sm">
+      <a href="/dashboard" class="hover:text-blue-400 transition">仪表盘</a>
+      <a href="/multi-end" class="hover:text-blue-400 transition">多端协同</a>
+      <a href="/docs" class="hover:text-blue-400 transition">API</a>
+      <a href="https://github.com/bcefghj/Agent-Pilot" target="_blank" class="hover:text-blue-400 transition">GitHub</a>
+    </div>
+  </nav>
+
+  <div class="text-center max-w-4xl mx-auto">
+    <div id="anim-title" class="text-5xl md:text-7xl font-extrabold leading-tight mb-6">
+      <div class="gradient-text">飞书 IM 中的</div>
+      <div class="gradient-text">AI 主驾驶 Harness</div>
+    </div>
+    <p id="anim-subtitle" class="text-lg md:text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
+      把"群聊讨论 → 文档 → 画布 → PPT + 演讲稿"压缩到 <span class="font-bold text-blue-400">90 秒</span>一键交付
+    </p>
+    <div id="anim-cta" class="flex flex-wrap gap-4 justify-center">
+      <a href="/dashboard" class="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl font-semibold hover:shadow-lg hover:shadow-blue-500/30 transition-all">
+        🎯 进入仪表盘
+      </a>
+      <a href="/multi-end" class="px-6 py-3 glass rounded-xl font-semibold hover:bg-white/5 transition-all">
+        🌐 多端实时监控
+      </a>
+    </div>
+  </div>
+
+  <!-- 状态心跳 -->
+  <div class="absolute top-8 right-8 flex items-center gap-2 text-sm">
+    <span class="w-3 h-3 rounded-full bg-green-400 pulse-ring"></span>
+    <span id="health-status" class="text-slate-400">检查中...</span>
+  </div>
+</header>
+
+<!-- ================== 5 Layer Architecture ================== -->
+<section class="max-w-7xl mx-auto px-6 py-16">
+  <h2 class="text-3xl font-bold mb-2 gradient-text">5 层 Harness 架构</h2>
+  <p class="text-slate-400 mb-8">借鉴 Anthropic Claude Code · Modern Agent Harness Blueprint 2026 · Cognition 单线程写</p>
+  <div id="layers-grid" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+    <!-- 由 JS 注入 -->
+  </div>
+</section>
+
+<!-- ================== Live Stats ================== -->
+<section class="max-w-7xl mx-auto px-6 py-12">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="glass rounded-2xl p-6">
+      <div class="text-slate-400 text-sm mb-1">活跃 Sessions</div>
+      <div id="stat-sessions" class="text-3xl font-bold gradient-text">—</div>
+    </div>
+    <div class="glass rounded-2xl p-6">
+      <div class="text-slate-400 text-sm mb-1">已注册 Tools</div>
+      <div id="stat-tools" class="text-3xl font-bold gradient-text">—</div>
+    </div>
+    <div class="glass rounded-2xl p-6">
+      <div class="text-slate-400 text-sm mb-1">飞书 SKILL</div>
+      <div id="stat-skills" class="text-3xl font-bold gradient-text">29</div>
+    </div>
+    <div class="glass rounded-2xl p-6">
+      <div class="text-slate-400 text-sm mb-1">Uptime</div>
+      <div id="stat-uptime" class="text-3xl font-bold gradient-text">—</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================== Architecture Diagram ================== -->
+<section class="max-w-7xl mx-auto px-6 py-12">
+  <h2 class="text-3xl font-bold mb-6 gradient-text">数据流</h2>
+  <div class="glass rounded-2xl p-6">
+    <pre class="mermaid">
+flowchart LR
+    F[飞书 IM] --> R[Routing 三闸门]
+    R --> P[Planner DAG]
+    P --> W[Writer 单线程写]
+    W --> DT[doc]
+    W --> CT[canvas]
+    W --> ST[slide]
+    W --> AT[archive]
+    AT --> HUB[CRDT Hub]
+    HUB --> WD[Web Dashboard]
+    HUB --> FT[Flutter 三端]
+    HUB --> F
+    </pre>
+  </div>
+</section>
+
+<!-- ================== 评分 ================== -->
+<section class="max-w-7xl mx-auto px-6 py-16">
+  <h2 class="text-3xl font-bold mb-6 gradient-text">评分维度</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="glass rounded-2xl p-6 hover:bg-white/5 transition">
+      <div class="text-2xl mb-2">📐</div>
+      <div class="font-bold mb-1">完整性 50%</div>
+      <div class="text-sm text-slate-400">90 秒端到端 · 5 条裁判用例 · JUDGE_GUIDE</div>
+    </div>
+    <div class="glass rounded-2xl p-6 hover:bg-white/5 transition">
+      <div class="text-2xl mb-2">💡</div>
+      <div class="font-bold mb-1">创新性 25%</div>
+      <div class="text-sm text-slate-400">5 层 Harness · 8 步 Loop · 三 Agent GAN harness · MCP 反向暴露</div>
+    </div>
+    <div class="glass rounded-2xl p-6 hover:bg-white/5 transition">
+      <div class="text-2xl mb-2">⚙️</div>
+      <div class="font-bold mb-1">技术 25%</div>
+      <div class="text-sm text-slate-400">单向依赖 · CRDT · OTel · 4 级权限 · 单元测试 37+</div>
+    </div>
+  </div>
+</section>
+
+<footer class="max-w-7xl mx-auto px-6 py-12 text-center text-sm text-slate-500">
+  <div>Agent-Pilot V1 · 飞书 AI 校园挑战赛 · 戴尚好 & 李洁盈</div>
+</footer>
+
+<script>
+// ── 5 Layer Cards ──
+const LAYERS = [
+  {emoji: "🚂", name: "Runtime", desc: "8 步 Claude Code harness loop", color: "from-blue-500 to-cyan-500"},
+  {emoji: "📚", name: "Context", desc: "append-only event log + filesystem memory", color: "from-cyan-500 to-teal-500"},
+  {emoji: "🛠️", name: "Capability", desc: "29 飞书 SKILL + 4 pilot SKILL + 三 Agent harness", color: "from-purple-500 to-pink-500"},
+  {emoji: "🛡️", name: "Governance", desc: "4 级权限 + owner_lock + 沙箱 + 审计", color: "from-orange-500 to-red-500"},
+  {emoji: "🌐", name: "Surface", desc: "飞书 IM + Web Dashboard + Flutter + MCP/ACP", color: "from-pink-500 to-rose-500"},
+];
+
+const grid = document.getElementById("layers-grid");
+LAYERS.forEach((l, i) => {
+  const div = document.createElement("div");
+  div.className = "glass rounded-2xl p-5 hover:scale-105 transition-all duration-300";
+  div.innerHTML = `
+    <div class="w-14 h-14 rounded-xl bg-gradient-to-br ${l.color} flex items-center justify-center text-2xl mb-3 shadow-lg">
+      ${l.emoji}
+    </div>
+    <div class="font-bold text-lg mb-1">${l.name}</div>
+    <div class="text-xs text-slate-400">${l.desc}</div>
+  `;
+  div.style.opacity = 0;
+  div.style.transform = "translateY(20px)";
+  grid.appendChild(div);
+  setTimeout(() => {
+    div.style.transition = "all 0.5s ease-out";
+    div.style.opacity = 1;
+    div.style.transform = "translateY(0)";
+  }, 100 * i);
+});
+
+// ── GSAP intro ──
+gsap.from("#anim-title > div:first-child", { y: 30, opacity: 0, duration: 0.8, ease: "power2.out" });
+gsap.from("#anim-title > div:last-child", { y: 30, opacity: 0, duration: 0.8, delay: 0.2, ease: "power2.out" });
+gsap.from("#anim-subtitle", { y: 20, opacity: 0, duration: 0.6, delay: 0.5 });
+gsap.from("#anim-cta", { y: 20, opacity: 0, duration: 0.6, delay: 0.7 });
+
+// ── Mermaid ──
+mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: {
+  primaryColor: "#1e293b", primaryTextColor: "#e2e8f0",
+  primaryBorderColor: "#475569", lineColor: "#94a3b8",
+}});
+
+// ── Health & Stats ──
+async function refresh() {
+  try {
+    const h = await fetch("/health").then(r => r.json());
+    document.getElementById("health-status").textContent = `运行中 · ${h.uptime_sec.toFixed(0)}s`;
+    document.getElementById("stat-uptime").textContent = (h.uptime_sec / 3600).toFixed(1) + "h";
+  } catch {
+    document.getElementById("health-status").textContent = "离线";
+  }
+  try {
+    const tools = await fetch("/api/tools").then(r => r.json());
+    document.getElementById("stat-tools").textContent = tools.length;
+  } catch {}
+  try {
+    const sess = await fetch("/api/sessions?limit=100").then(r => r.json());
+    document.getElementById("stat-sessions").textContent = sess.length || "0";
+  } catch {}
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

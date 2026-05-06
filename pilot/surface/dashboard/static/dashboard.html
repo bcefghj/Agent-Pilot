@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>仪表盘 · Agent-Pilot V1</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<style>
+  body { font-family: -apple-system, "PingFang SC", Inter, sans-serif; background: #0a0e27; color: #e2e8f0; }
+  .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); }
+  .gradient-text { background: linear-gradient(135deg, #60a5fa, #c084fc, #f472b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+  .pulse-dot { animation: pulse-dot 1.5s infinite; }
+  @keyframes slide-in { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .slide-in { animation: slide-in 0.3s ease-out; }
+  pre { white-space: pre-wrap; word-break: break-all; }
+  .step-running { background: linear-gradient(90deg, rgba(96,165,250,0.1), transparent); border-left: 3px solid #60a5fa; }
+  .step-done { border-left: 3px solid #34d399; }
+  .step-failed { border-left: 3px solid #f87171; }
+  .step-pending { border-left: 3px solid #475569; opacity: 0.6; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<header class="border-b border-white/10 px-6 py-4">
+  <div class="max-w-7xl mx-auto flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="/" class="text-2xl">🛫</a>
+      <div>
+        <div class="font-bold gradient-text">Agent-Pilot V1 仪表盘</div>
+        <div class="text-xs text-slate-400">plan_id: <span id="plan-id-display">{{PLAN_ID}}</span></div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 text-sm">
+      <span class="w-2 h-2 rounded-full bg-green-400 pulse-dot"></span>
+      <span id="ws-status" class="text-slate-400">连接中</span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
+  <!-- 左：Sessions 列表 -->
+  <aside class="lg:col-span-3 glass rounded-2xl p-4">
+    <h2 class="font-bold mb-3 gradient-text">最近 Sessions</h2>
+    <div id="session-list" class="space-y-2 max-h-[600px] overflow-y-auto"></div>
+  </aside>
+
+  <!-- 中：Agent thinking 流 -->
+  <section class="lg:col-span-6 glass rounded-2xl p-4">
+    <h2 class="font-bold mb-3 gradient-text">Agent thinking 流</h2>
+    <div id="thinking-stream" class="space-y-2 max-h-[600px] overflow-y-auto font-mono text-xs"></div>
+  </section>
+
+  <!-- 右：8 步 Harness Loop 可视化 + 工具调用 -->
+  <aside class="lg:col-span-3 space-y-4">
+    <div class="glass rounded-2xl p-4">
+      <h2 class="font-bold mb-3 gradient-text">8 步 Harness Loop</h2>
+      <ol id="harness-steps" class="space-y-2 text-xs">
+        <li class="step-pending pl-3 py-2">1. Assemble Context</li>
+        <li class="step-pending pl-3 py-2">2. Call LLM API</li>
+        <li class="step-pending pl-3 py-2">3. Parse Response</li>
+        <li class="step-pending pl-3 py-2">4. Check Permission</li>
+        <li class="step-pending pl-3 py-2">5. Execute Tools</li>
+        <li class="step-pending pl-3 py-2">6. Feed Results Back</li>
+        <li class="step-pending pl-3 py-2">7. Context Check</li>
+        <li class="step-pending pl-3 py-2">8. Termination</li>
+      </ol>
+    </div>
+
+    <div class="glass rounded-2xl p-4">
+      <h2 class="font-bold mb-3 gradient-text">工具调用</h2>
+      <div id="tool-list" class="space-y-2 text-xs max-h-[300px] overflow-y-auto"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+const planId = (new URLSearchParams(location.search).get("plan_id")) ||
+               document.getElementById("plan-id-display").textContent.replace("{{PLAN_ID}}", "").trim() ||
+               "";
+
+document.getElementById("plan-id-display").textContent = planId || "(未指定)";
+
+// ── Sessions ──
+async function loadSessions() {
+  try {
+    const list = await fetch("/api/sessions?limit=20").then(r => r.json());
+    const dom = document.getElementById("session-list");
+    dom.innerHTML = "";
+    if (!list.length) {
+      dom.innerHTML = '<div class="text-slate-500 text-sm">暂无 session。在飞书发条消息试试 ✨</div>';
+      return;
+    }
+    for (const s of list) {
+      const card = document.createElement("a");
+      card.href = "?plan_id=" + s.session_id;
+      card.className = "block p-2 rounded-lg hover:bg-white/5 slide-in";
+      card.innerHTML = `
+        <div class="font-mono text-xs text-blue-300">${(s.session_id||"").slice(0, 24)}</div>
+        <div class="text-xs text-slate-400 mt-1">${s.mode||"-"} · ${s.user_open_id?.slice(-6)||""}</div>
+      `;
+      dom.appendChild(card);
+    }
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+// ── Tools ──
+async function loadTools() {
+  try {
+    const tools = await fetch("/api/tools").then(r => r.json());
+    const dom = document.getElementById("tool-list");
+    dom.innerHTML = "";
+    for (const t of tools) {
+      const it = document.createElement("div");
+      it.className = "flex items-center gap-2 p-2 rounded hover:bg-white/5";
+      const dot = t.read_only ? "bg-blue-400" : "bg-orange-400";
+      it.innerHTML = `
+        <span class="w-2 h-2 rounded-full ${dot}"></span>
+        <span class="font-mono text-blue-200">${t.name}</span>
+        <span class="ml-auto text-slate-500 text-[10px]">${t.read_only ? "读" : "写"}</span>
+      `;
+      dom.appendChild(it);
+    }
+  } catch (e) { console.warn(e); }
+}
+
+// ── SSE 事件流（如果 plan_id 有效）──
+function subscribeEvents() {
+  if (!planId) return;
+  const dom = document.getElementById("thinking-stream");
+  document.getElementById("ws-status").textContent = "实时";
+
+  try {
+    const es = new EventSource("/api/events/" + planId);
+    es.onmessage = (e) => {
+      try {
+        const evt = JSON.parse(e.data);
+        const item = document.createElement("div");
+        item.className = "p-2 rounded slide-in flex gap-2";
+        const t = new Date(evt.ts * 1000);
+        const tStr = t.toTimeString().slice(0, 8);
+        const kindColor = {
+          "user_message": "text-cyan-300",
+          "assistant_text": "text-purple-300",
+          "tool_result": "text-emerald-300",
+          "step.start": "text-yellow-300",
+          "step.done": "text-green-300",
+          "step.failed": "text-red-300",
+          "harness.assemble": "text-blue-300",
+          "harness.llm_call.start": "text-blue-400",
+          "harness.llm_call.done": "text-green-400",
+          "harness.tools.read.start": "text-orange-300",
+          "harness.tools.write.start": "text-pink-300",
+        }[evt.kind] || "text-slate-400";
+
+        item.innerHTML = `
+          <span class="text-slate-500">${tStr}</span>
+          <span class="${kindColor}">[${evt.kind}]</span>
+          <span class="text-slate-300 truncate">${JSON.stringify(evt.payload).slice(0, 200)}</span>
+        `;
+        dom.insertBefore(item, dom.firstChild);
+        // 高亮对应 harness step
+        highlightStep(evt.kind);
+      } catch {}
+    };
+    es.onerror = () => {
+      document.getElementById("ws-status").textContent = "断开";
+    };
+  } catch (e) { console.warn(e); }
+}
+
+function highlightStep(kind) {
+  const map = {
+    "harness.assemble": 0,
+    "harness.llm_call.start": 1,
+    "harness.llm_call.done": 1,
+    "harness.parse": 2,
+    "harness.permit": 3,
+    "harness.tools.read.start": 4,
+    "harness.tools.write.start": 4,
+    "harness.feedback": 5,
+    "harness.context_reset": 6,
+    "harness.end": 7,
+  };
+  const idx = map[kind];
+  if (idx === undefined) return;
+  const items = document.getElementById("harness-steps").children;
+  for (let i = 0; i < items.length; i++) {
+    items[i].className = i < idx ? "step-done pl-3 py-2"
+                       : i === idx ? "step-running pl-3 py-2"
+                       : "step-pending pl-3 py-2";
+  }
+}
+
+loadSessions();
+loadTools();
+subscribeEvents();
+setInterval(loadSessions, 10000);
+</script>
+</body>
+</html>

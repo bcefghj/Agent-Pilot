@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>多端协同 · Agent-Pilot V1</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, "PingFang SC", Inter, sans-serif; background: #0a0e27; color: #e2e8f0; }
+  .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); }
+  .gradient-text { background: linear-gradient(135deg, #60a5fa, #c084fc, #f472b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+  .pulse-dot { animation: pulse-dot 1.5s infinite; }
+  .endpoint-card { transition: all 0.3s; }
+  .endpoint-card:hover { transform: translateY(-4px); }
+  .endpoint-card.active { box-shadow: 0 0 20px rgba(96,165,250,0.3); border-color: #60a5fa; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<header class="border-b border-white/10 px-6 py-4">
+  <div class="max-w-7xl mx-auto flex items-center justify-between">
+    <a href="/" class="flex items-center gap-3">
+      <span class="text-2xl">🌐</span>
+      <span class="font-bold gradient-text">多端协同实时监控</span>
+    </a>
+    <div class="text-sm text-slate-400">CRDT-based · pycrdt-websocket</div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8">
+
+<!-- Endpoints -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+  <div class="endpoint-card glass rounded-2xl p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-3xl">📱</div>
+      <span class="w-2 h-2 rounded-full bg-green-400 pulse-dot"></span>
+    </div>
+    <div class="font-bold mb-1">飞书 IM</div>
+    <div class="text-xs text-slate-400">手机/桌面端长连接</div>
+    <div id="ep-feishu-info" class="mt-3 text-xs text-slate-500">连接中...</div>
+  </div>
+  <div class="endpoint-card glass rounded-2xl p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-3xl">💻</div>
+      <span class="w-2 h-2 rounded-full bg-green-400 pulse-dot"></span>
+    </div>
+    <div class="font-bold mb-1">Web Dashboard</div>
+    <div class="text-xs text-slate-400">浏览器（你正在看）</div>
+    <div id="ep-web-info" class="mt-3 text-xs text-slate-500">本地</div>
+  </div>
+  <div class="endpoint-card glass rounded-2xl p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-3xl">🍎</div>
+      <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+    </div>
+    <div class="font-bold mb-1">Flutter macOS/Android</div>
+    <div class="text-xs text-slate-400">原生客户端</div>
+    <div id="ep-flutter-info" class="mt-3 text-xs text-slate-500">未连接（M8 预留）</div>
+  </div>
+</section>
+
+<!-- Sync Stats -->
+<section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+  <div class="glass rounded-xl p-4">
+    <div class="text-slate-400 text-xs mb-1">活跃房间</div>
+    <div id="stat-rooms" class="text-2xl font-bold gradient-text">0</div>
+  </div>
+  <div class="glass rounded-xl p-4">
+    <div class="text-slate-400 text-xs mb-1">在线 Presence</div>
+    <div id="stat-presence" class="text-2xl font-bold gradient-text">0</div>
+  </div>
+  <div class="glass rounded-xl p-4">
+    <div class="text-slate-400 text-xs mb-1">CRDT updates / s</div>
+    <div id="stat-rate" class="text-2xl font-bold gradient-text">—</div>
+  </div>
+  <div class="glass rounded-xl p-4">
+    <div class="text-slate-400 text-xs mb-1">离线 buffer</div>
+    <div id="stat-buffer" class="text-2xl font-bold gradient-text">0</div>
+  </div>
+</section>
+
+<!-- Live event stream -->
+<section class="glass rounded-2xl p-5">
+  <h2 class="font-bold gradient-text mb-3">实时事件流</h2>
+  <div id="live-stream" class="font-mono text-xs space-y-1 max-h-[400px] overflow-y-auto"></div>
+</section>
+
+</main>
+
+<script>
+const ws = new WebSocket(`ws://${location.host}/ws`);
+const stream = document.getElementById("live-stream");
+
+ws.onopen = () => {
+  document.getElementById("ep-web-info").textContent = "实时连接 ✓";
+  log("ws.connected", { ts: Date.now() });
+  setInterval(() => ws.send("ping"), 30000);
+};
+ws.onmessage = (e) => log("ws.msg", { data: e.data });
+ws.onclose = () => {
+  document.getElementById("ep-web-info").textContent = "已断开";
+  log("ws.closed", {});
+};
+
+function log(kind, payload) {
+  const item = document.createElement("div");
+  const t = new Date().toTimeString().slice(0, 8);
+  item.className = "flex gap-3";
+  item.innerHTML = `
+    <span class="text-slate-500">${t}</span>
+    <span class="text-blue-300">[${kind}]</span>
+    <span class="text-slate-300 truncate">${JSON.stringify(payload).slice(0, 200)}</span>
+  `;
+  stream.insertBefore(item, stream.firstChild);
+  if (stream.children.length > 200) stream.lastChild.remove();
+}
+
+async function refresh() {
+  try {
+    const sess = await fetch("/api/sessions?limit=100").then(r => r.json());
+    document.getElementById("stat-rooms").textContent = sess.length;
+  } catch {}
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
