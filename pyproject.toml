@@ -1,91 +1,89 @@
 [project]
 name = "agent-pilot"
-version = "12.0.0"
-description = "Agent-Pilot: AI-driven office automation from IM to presentations"
+version = "1.0.0"
+description = "Agent-Pilot V1 — 飞书 IM 中的 AI 主驾驶 Harness"
+readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = { text = "MIT" }
 authors = [
-    {name = "戴尚好", email = "bcefghj@163.com"},
-    {name = "李洁盈", email = "JieyingLiii@outlook.com"},
+    { name = "戴尚好", email = "bcefghj@163.com" },
+    { name = "李洁盈", email = "JieyingLiii@outlook.com" },
 ]
-keywords = ["ai-agent", "feishu", "lark", "office-automation", "multi-agent", "crdt", "mcp", "function-calling", "harness-engineering"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Topic :: Office/Business",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+keywords = ["agent", "harness", "feishu", "lark", "llm", "multi-agent", "crdt"]
+
+dependencies = [
+    "lark-oapi>=1.4.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "websockets>=12.0",
+    "pycrdt>=0.10",
+    "pycrdt-websocket>=0.16",
+    "langgraph>=0.3",
+    "anthropic>=0.40",
+    "openai>=1.50",
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "python-pptx>=0.6.23",
+    "pillow>=10.0",
+    "apscheduler>=3.10",
+    "structlog>=24.0",
+    "python-dotenv>=1.0",
+    "redis>=5.0",
+    "aiofiles>=23.0",
+    "opentelemetry-api>=1.27",
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
+    "tenacity>=9.0",
+    "rich>=13.7",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "pre-commit>=3.7",
+    "mypy>=1.10",
+]
+mcp = [
+    "mcp>=1.0",
+]
+tts = [
+    "gtts>=2.5",
+]
+
+[project.scripts]
+agent-pilot = "pilot.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pilot*"]
+exclude = ["tests*", "flutter_client*", "data*"]
 
 [tool.ruff]
-target-version = "py310"
 line-length = 120
+target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "TCH", "RUF"]
-ignore = [
-    "E402", "E501", "E741",
-    "B008",
-    "F401", "F841",
-    "I001",
-    "RUF001", "RUF002", "RUF003", "RUF012", "RUF015",
-    "UP006", "UP035",
-    "SIM102", "SIM108", "SIM117",
-    "TC002", "TC003",
-]
-
-[tool.ruff.lint.isort]
-known-first-party = ["core", "agent", "bot", "llm", "memory", "dashboard", "utils"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011", "SIM"]
-# New optimized files - apply stricter linting
-"bot/streaming.py" = []
-"bot/cards_streaming.py" = []
-"bot/handlers/*" = []
-"core/exceptions.py" = []
-"core/logging_config.py" = []
-"core/sync/health.py" = []
-"agent/patterns/builder_validator.py" = []
-# Existing codebase - more relaxed
-"*" = ["RUF100", "C4", "B", "SIM", "TC"]
-
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
-check_untyped_defs = true
-ignore_missing_imports = true
-exclude = ["tests/", "mobile_desktop/"]
+select = ["E", "F", "W", "I", "B", "UP", "RUF"]
+ignore = ["E501", "B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --tb=short --timeout=60 -x"
+asyncio_mode = "auto"
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks integration tests requiring external services",
-    "e2e: end-to-end tests",
-    "unit: fast unit tests",
+    "competition: 裁判级 e2e 用例",
+    "real_llm: 需要真 LLM API（默认跳过）",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
 
-[tool.coverage.run]
-source = ["core", "agent", "bot"]
-omit = ["tests/*", "*/__pycache__/*", "*/legacy/*"]
-branch = true
-
-[tool.coverage.report]
-fail_under = 60
-show_missing = true
-exclude_lines = [
-    "pragma: no cover",
-    "if TYPE_CHECKING:",
-    "if __name__ == .__main__.",
-    "pass",
-    "raise NotImplementedError",
-]
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true

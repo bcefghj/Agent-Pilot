@@ -1,39 +1,26 @@
-# ── Core ──
-lark-oapi>=1.5.0
-openai>=1.0.0
-python-dotenv>=1.0.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-apscheduler>=3.10.0
-fastapi>=0.110.0
-uvicorn>=0.27.0
-rank-bm25>=0.2.2
-numpy>=1.24.0
-
-# ── Testing ──
-pytest>=7.0.0
-pytest-cov>=4.1.0
-pytest-timeout>=2.2.0
-
-# ── Multi-end sync ──
+lark-oapi>=1.4.0
+fastapi>=0.115
+uvicorn[standard]>=0.30
 websockets>=12.0
-y-py>=0.6.2; python_version < "3.13"
-redis>=5.0.0
-
-# ── Agent harness ──
-python-multipart>=0.0.9
-requests>=2.32.0
-structlog>=24.1.0
-
-# ── Long-term memory (optional, falls back to local JSONL) ──
-mem0ai>=0.1.30; python_version >= "3.10"
-
-# ── Observability ──
-prometheus-client>=0.20.0
-opentelemetry-api>=1.25.0
-opentelemetry-sdk>=1.25.0
-opentelemetry-instrumentation-fastapi>=0.46b0
-
-# ── v13 Real PPTX trio ──
+pycrdt>=0.10
+pycrdt-websocket>=0.16
+langgraph>=0.3
+anthropic>=0.40
+openai>=1.50
+httpx>=0.27
+pydantic>=2.7
 python-pptx>=0.6.23
-gtts>=2.5.0  # optional TTS for演讲稿 mp3 (gated by AGENT_PILOT_ENABLE_TTS)
+pillow>=10.0
+apscheduler>=3.10
+structlog>=24.0
+python-dotenv>=1.0
+redis>=5.0
+aiofiles>=23.0
+opentelemetry-api>=1.27
+opentelemetry-sdk>=1.27
+opentelemetry-instrumentation-fastapi>=0.48b0
+tenacity>=9.0
+rich>=13.7
+pytest>=8.0
+pytest-asyncio>=0.24
+ruff>=0.6

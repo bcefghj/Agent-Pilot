@@ -1,47 +1,26 @@
-# Agent-Pilot v12 · Multi-stage production container
+FROM python:3.11-slim
 
-# Stage 1: Python dependencies (3.11 for y-py CRDT compatibility)
-FROM python:3.11-slim AS python-deps
-WORKDIR /build
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
-
-# Stage 2: Node.js tools (Feishu CLI)
-FROM node:20-slim AS node-deps
-RUN npm install -g @larksuite/cli 2>/dev/null || true
-
-# Stage 3: Production image
-FROM python:3.11-slim AS production
-LABEL maintainer="Agent-Pilot Team"
-LABEL version="12.0.0"
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    tini ca-certificates curl \
- && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Copy Python deps
-COPY --from=python-deps /install /usr/local
-
-# Copy Node.js (for Feishu CLI)
-COPY --from=node-deps /usr/local/lib/node_modules /usr/local/lib/node_modules
-COPY --from=node-deps /usr/local/bin/node /usr/local/bin/node
-RUN ln -sf /usr/local/lib/node_modules/.bin/* /usr/local/bin/ 2>/dev/null || true
-
-# App code
 WORKDIR /app
-COPY . .
 
-ENV AGENT_PILOT_HOME=/data/agent-pilot
-ENV AGENT_PILOT_DEMO_MODE=false
-ENV PATH=/usr/local/bin:$PATH
+# 系统依赖（slidev / pptx 渲染）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl ca-certificates fonts-noto-cjk fontconfig \
+    nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
 
-VOLUME ["/data"]
+# Slidev for HTML PPT
+RUN npm install -g @slidev/cli @slidev/theme-default 2>/dev/null || true
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" || exit 1
+# Python 依赖
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 8001 8002 8767
+# 项目文件
+COPY pilot /app/pilot
+COPY pyproject.toml AGENTS.md README.md /app/
+COPY data /app/data
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["bash", "run_services.sh"]
+# 默认端口
+EXPOSE 8001 8002 8003
+
+CMD ["python", "-m", "pilot", "all"]

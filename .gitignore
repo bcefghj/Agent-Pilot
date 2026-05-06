@@ -2,59 +2,70 @@
 __pycache__/
 *.py[cod]
 *.so
-*.egg-info/
-dist/
+.Python
 build/
+dist/
+*.egg-info/
+.eggs/
 .pytest_cache/
-.mypy_cache/
 .ruff_cache/
-htmlcov/
+.mypy_cache/
 .coverage
+htmlcov/
 
-# Environment
+# Virtual env
 .venv/
 venv/
-.env
-.env.*
+env/
+ENV/
 
-# Data & logs
-data/
-!data/v13_progress.json
-*.log
-logs/
+# Env vars / secrets
+.env
+.env.local
+.env.*.local
+*.secret
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Archives
-*.tar.gz
-*.zip
+# Data / artifacts
+data/artifacts/**
+data/plans/**
+data/sessions/**
+data/events/**
+data/context_packs/*.json
+data/test_reports/**
+data/uploads/**
+*.sqlite
+*.sqlite3
 
-# IDE
-.idea/
-.vscode/
+# Logs
+*.log
+logs/
 
 # Flutter
-mobile_desktop/.dart_tool/
-mobile_desktop/.flutter-plugins
-mobile_desktop/.flutter-plugins-dependencies
-mobile_desktop/build/
-mobile_desktop/.idea/
-mobile_desktop/.vscode/
-mobile_desktop/ios/Pods/
-mobile_desktop/ios/.symlinks/
-mobile_desktop/ios/Flutter/Flutter.framework
-mobile_desktop/ios/Flutter/Flutter.podspec
-mobile_desktop/android/.gradle/
-mobile_desktop/android/build/
-mobile_desktop/android/app/build/
-mobile_desktop/macos/Pods/
-mobile_desktop/windows/build/
-mobile_desktop/pubspec.lock
+flutter_client/build/
+flutter_client/.dart_tool/
+flutter_client/.flutter-plugins
+flutter_client/.flutter-plugins-dependencies
+flutter_client/.packages
+flutter_client/macos/
+flutter_client/ios/
+flutter_client/android/
+flutter_client/windows/
+flutter_client/web/build/
 
-# Runtime
-.agent-pilot/auto_memory/
-.agent-pilot/state/
-*.sqlite3
-*.db
+# Backups
+本地全量备份_*/
+服务器备份_*/
+服务器快速备份_*/
+
+# Skill submodule (optional pre-cache)
+pilot/capability/skills/lark-cli-skills/.git/
