@@ -1,11 +1,11 @@
-# Agent-Pilot V1
+# Agent-Pilot V1.5
 
-> **飞书 IM 中的 AI 主驾驶 Harness · 从一句话到方案文档 + 架构画布 + 演示稿 + 演讲稿，90 秒交付**
+> **飞书 IM 中的 AI 主驾驶 · 从一句话到方案文档 + PPT + 演讲稿，90 秒交付**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V1.0-orange.svg)]()
-[![Architecture](https://img.shields.io/badge/architecture-5--layer%20Harness-purple.svg)](docs/ARCHITECTURE.md)
+[![Version](https://img.shields.io/badge/version-V1.5.0-orange.svg)](CHANGELOG-v1.5.md)
+[![Tests](https://img.shields.io/badge/tests-131%20unit%20%2B%207%20e2e%20%2B%20T20%20smoke-brightgreen.svg)]()
 
 ---
 
@@ -13,168 +13,109 @@
 
 在飞书直接说：
 
-> 帮我写一份关于 AI Agent 发展趋势的报告
+> 谢娜成都演唱会三件套
 
 Agent-Pilot 自动完成：
 
-1. **三闸门意图识别**（Routing 模式）
-2. **三 Agent Harness 规划**（Planner / Generator / Evaluator，借鉴 Anthropic 2026-03 长任务最佳实践）
-3. **8 步 Claude Code Harness Loop** 编排（assemble → call → parse → permit → execute → feed → check → terminate）
-4. **真产物**：飞书 Docx · 真 `.pptx` 文件 · Mermaid + tldraw 画布 · 演讲稿 + 可选 TTS
-5. **多端 CRDT 同步**：飞书 IM、Web Dashboard、Flutter macOS/Android 通过 Yjs 实时一致
+1. **5 闸门意图识别**（命令 → /pilot → 关键字 → LLM judge → 闲聊兜底）
+2. **联网搜索**（DDG + Bing 双兜底，时效词 / 事件名自动触发）
+3. **Planner 规划**（LLM-driven + 8 例 few-shot + 启发式 fallback）
+4. **真产物**：飞书 Docx（引用真实搜索数据）· 真 `.pptx` 文件 · 演讲稿
+5. **实时 Dashboard**：中文化事件流 + 进度条 + SSE 实时推送
 
 ---
 
-## 为什么 V1（相对 v13 / v12 / v3 / v4 全部废弃）
+## V1.5 核心特性
 
-V1 是一次彻底重写，引入了 v13 完全没有的工程能力：
-
-| 能力 | v13 | V1 |
+| 特性 | 实现 | 证据 |
 |---|---|---|
-| Agent 架构 | 工具 + 简陋 DAG | **5 层 Harness（Runtime/Context/Capability/Governance/Surface）** |
-| 编排循环 | 自定义 orchestrator | **Claude Code 8 步 harness loop** |
-| 长任务 | 单 LLM 8K tokens 串行（6 分钟） | **三 Agent GAN harness + Sprint 合约**（90 秒） |
-| 飞书工具 | 自己拼 lark-oapi | **直接 load `larksuite/cli` 29 个官方 SKILL** |
-| 反向调用 | 无 | **MCP server 反向暴露**，Cursor/Claude/Trae 可调 V1 |
-| 缓存 | 命中率 0 | **`SYSTEM_PROMPT_DYNAMIC_BOUNDARY` 两段缓存** |
-| Working Memory | 7000 字 markdown 塞 history | **`artifact://...` handle 引用** |
-| 权限 | 无 | **4 级权限网关 deny → allow → classifier → ask** |
-| 多端 | Flutter 38 行空壳 | **pycrdt-websocket 真 CRDT + yjs-flutter 三端** |
-
----
-
-## 评分对照表（裁判 30 秒能验证每条）
-
-| 维度 | 赛题/PRD 要求 | V1 落地 | 证据 |
-|------|---|---|---|
-| **完整性 50%** | Must-1 多端框架 | pycrdt-websocket Hub + Flutter 三端 | [`pilot/surface/sync/`](pilot/surface/sync/) · [`flutter_client/`](flutter_client/) |
-| | Must-2-A 意图入口 | 文本 + 语音；自然语言 + `/pilot` | [`pilot/runtime/intent_router.py`](pilot/runtime/) |
-| | Must-2-B 任务理解 | LangGraph state machine + Few-Shot Planner | [`pilot/runtime/planner.py`](pilot/runtime/) |
-| | Must-2-C 文档/白板 | 飞书 Docx + 飞书白板 + tldraw + Mermaid | [`pilot/capability/skills/pilot-doc/`](pilot/capability/skills/pilot-doc/) |
-| | Must-2-D 演示稿 | 真 .pptx（5 模板）+ Slidev HTML + 演讲稿 | [`pilot/capability/skills/pilot-slide/`](pilot/capability/skills/pilot-slide/) |
-| | Must-2-E 多端一致 | CRDT + 任务状态机锁定 | [`pilot/governance/owner_lock.py`](pilot/governance/) |
-| | Must-2-F 归档交付 | 飞书分享链接 + 任务中心 | [`pilot/capability/skills/pilot-archive/`](pilot/capability/skills/pilot-archive/) |
-| | Must-3 自然语言 | 飞书 ASR + 三闸门 | [`pilot/capability/tools/voice.py`](pilot/capability/tools/) |
-| **创新 25%** | AI 创新 | **5 层 Harness + 8 步 Loop + 三 Agent GAN harness** | [`docs/HARNESS_DESIGN.md`](docs/) |
-| | 差异化 | **直接 load lark-cli 29 SKILL + 反向 MCP server** | [`pilot/capability/skills/lark-cli-skills/`](pilot/capability/skills/lark-cli-skills/) |
-| | 可复用 | AGENTS.md cascade + SKILL.md 体系 | [AGENTS.md](AGENTS.md) |
-| **技术 25%** | AI 深度 | LangGraph + 多 Provider + JSON safe + Few-Shot | [`pilot/llm/`](pilot/llm/) |
-| | 架构合理 | 5 层 Harness 单向依赖 | [`docs/ARCHITECTURE.md`](docs/) |
-| | 工程规范 | pre-commit + pytest + ruff + OpenTelemetry | [`pyproject.toml`](pyproject.toml) |
-| | 稳定性 | 4 级权限 + 沙箱 + 审计 + 429 退避 | [`pilot/governance/`](pilot/governance/) |
+| 5 闸门 IntentRouter | 命令/显式/关键字/LLM/闲聊，不沉默 | [`pilot/runtime/intent_router.py`](pilot/runtime/intent_router.py) |
+| 真联网搜索 | DDG HTML + Bing CN，无需 API key | [`pilot/llm/web_search.py`](pilot/llm/web_search.py) |
+| MiniMax-only LLM | 锁死 M2.7-highspeed，30s retry | [`pilot/llm/client.py`](pilot/llm/client.py) |
+| 飞书 OpenAPI 真集成 | im.fetch_thread / doc.search / bitable.search | [`pilot/capability/tools/lark_tools.py`](pilot/capability/tools/lark_tools.py) |
+| 反向 MCP Server | :8003 暴露 4 工具给 Cursor/Claude Desktop | [`pilot/surface/lark_mcp_runner.py`](pilot/surface/lark_mcp_runner.py) |
+| 10 状态机 | LEGAL_TRANSITIONS 校验 + stage_owners | [`pilot/runtime/session.py`](pilot/runtime/session.py) |
+| Dashboard 中文化 | 事件 i18n + 进度条 + 30s heartbeat | [`pilot/surface/dashboard/`](pilot/surface/dashboard/) |
+| OpenClaw 兼容 | 字段对照（不 vendor submodule） | [`docs/OPENCLAW_COMPAT.md`](docs/OPENCLAW_COMPAT.md) |
 
 ---
 
 ## 快速开始
 
-### 一、本地开发
+### 本地开发
 
 ```bash
-git clone https://github.com/bcefghj/Agent-Pilot.git
-cd Agent-Pilot
+git clone https://github.com/bcefghj/Agent-Pilot.git && cd Agent-Pilot
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[bot,dashboard]"
+cp .env.example .env  # 填 FEISHU_APP_ID / FEISHU_APP_SECRET / MINIMAX_API_KEY
 
-# 1. 安装依赖
-python3.10 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+# 跑全量测试（LLM_MOCK）
+LLM_MOCK=1 pytest tests/ -q
+LLM_MOCK=1 python scripts/run_t20_smoke.py
 
-# 2. 配置环境
-cp .env.example .env
-# 必填：FEISHU_APP_ID / FEISHU_APP_SECRET / MINIMAX_API_KEY 或 ANTHROPIC_API_KEY
-
-# 3. 跑 Mock 端到端测试
-pytest tests/competition/ -v
-
-# 4. 启动飞书 Bot + Dashboard
+# 启动全部服务
 python -m pilot all
-# 访问：
-#   Web Dashboard:    http://localhost:8001/dashboard
-#   多端实时监控:     http://localhost:8001/multi-end
-#   API 文档:         http://localhost:8001/docs
-#   MCP server:       http://localhost:8001/mcp
+# Dashboard: http://localhost:8001
+# MCP:       http://localhost:8003/sse
 ```
 
-### 二、Flutter 客户端（macOS / Android / iOS / Web）
+### 服务器一键部署（Ubuntu 22.04）
 
 ```bash
-cd flutter_client
-flutter pub get
-flutter run -d chrome   # 最快验证
-flutter run -d macos    # 桌面端
-flutter build apk       # Android
+ssh root@8.136.98.175
+curl -fsSL https://raw.githubusercontent.com/bcefghj/Agent-Pilot/main/scripts/server/install.sh | bash
+nano /opt/agent-pilot/.env   # 填飞书 + MiniMax 凭据
+systemctl start agent-pilot-bot
 ```
 
-### 三、Docker 一键
+详见 [`docs/DEPLOY.md`](docs/DEPLOY.md)。
 
-```bash
-docker-compose up -d
+### Cursor / Claude Desktop 接入反向 MCP
+
+编辑 `~/.cursor/mcp.json`：
+
+```json
+{"mcpServers": {"agent-pilot": {"url": "http://8.136.98.175/sse"}}}
 ```
+
+详见 [`docs/MCP_USAGE.md`](docs/MCP_USAGE.md)。
 
 ---
 
 ## 飞书机器人使用
-
-直接发以下任意一条：
 
 | 想要什么 | 直接说 |
 |---|---|
 | 文档 | `帮我写一份关于 X 的报告` |
 | PPT | `做一份 8 页客户汇报 PPT` |
 | 架构图 | `画一张产品架构图` |
-| **三件套** | `产品方案 + 架构图 + 评审 PPT` ⭐ |
-| 模糊意图 | `帮我做个汇报` → Agent 主动澄清 |
-
-或显式命令：
-
-| 命令 | 作用 |
-|---|---|
-| `/pilot <意图>` | 强制触发 Pilot 流程 |
-| `/plan <意图>` | 只规划不执行 |
-| `状态` | 当前任务进度 |
-| `帮助` | 完整使用卡片 |
-
-**预计耗时**：60-90 秒，依意图复杂度而定（v13 是 360 秒）。
+| **三件套** | `产品方案 + 架构图 + 评审 PPT` |
+| **联网三件套** | `谢娜成都演唱会三件套` |
+| 联网文档 | `今年最新 AI Agent 进展文档` |
+| 模糊意图 | `帮我做个汇报` → 主动澄清 |
+| 闲聊 | `你好` / `谢谢` → 友好回复，不沉默 |
+| 命令 | `帮助` / `状态` / `/pilot <意图>` |
 
 ---
 
-## 5 层 Harness 架构总览
+## 架构
 
 ```mermaid
 flowchart TB
-    subgraph S5[Surface 层 · 接入]
-        IM[飞书 IM]
-        WD[Web Dashboard]
-        FT[Flutter 三端]
-        MCP[MCP Server]
-    end
-    subgraph S1[Runtime 层 · 8 步 Claude Code Harness Loop]
-        HARNESS[assemble → call → parse → permit<br/>→ execute → feedback → check → terminate]
-    end
-    subgraph S2[Context 层]
-        EVENTLOG[append-only Event Log]
-        FSMEM[Filesystem Working Memory]
-        AGENTSMD[AGENTS.md cascade]
-    end
-    subgraph S3[Capability 层]
-        WF[Workforce: Planner/Generator/Evaluator]
-        SKILLS[Skills: 29 lark-cli + 4 pilot-*]
-        TOOLS[Tools: doc/canvas/slide/archive/voice]
-    end
-    subgraph S4[Governance 层]
-        PERM[4 级权限]
-        AUDIT[审计 + OTel]
-    end
-    IM --> HARNESS
-    WD --> HARNESS
-    FT --> HARNESS
-    HARNESS --> EVENTLOG
-    HARNESS --> WF
-    WF --> SKILLS --> TOOLS
-    HARNESS --> PERM
-    PERM --> AUDIT
-    MCP --> SKILLS
+    user[用户飞书发消息] --> bot[lark-oapi WS bot]
+    bot --> idem{60s 去重}
+    idem -->|new| router[5 闸门 IntentRouter]
+    router --> g3{关键字 + LLM judge}
+    g3 -->|READY| planner[Planner LLM few-shot]
+    planner -->|timely| ws[web.search 第 0 步]
+    planner --> orch[Orchestrator]
+    orch --> tools[doc.* / slide.* / web.search / lark.*]
+    orch --> deliver[task_delivered_card]
+    orch --> dashboard[Dashboard SSE]
+    bot -.-> mcp[反向 MCP :8003]
+    mcp -.-> cursor[Cursor / Claude Desktop]
 ```
-
-详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
 ---
 
@@ -182,43 +123,70 @@ flowchart TB
 
 ```
 Agent-Pilot/
-├── pilot/                          # ★ V1 单一 Python 包
-│   ├── runtime/                    # 8 步 harness loop · 状态机 · 检查点
-│   ├── context/                    # 事件日志 · ContextPack · filesystem 内存
-│   ├── capability/                 # 工具 · Skills · Workforce · MCP 客户端
-│   ├── governance/                 # 4 级权限 · owner_lock · 沙箱 · 审计
-│   ├── surface/                    # 飞书 IM · Dashboard · Flutter sync · MCP/ACP server
-│   └── llm/                        # 多 Provider · safe_json · few_shot
-├── flutter_client/                 # 真 macOS/Android/Web 三端
-├── tests/competition/              # 5 条裁判级 e2e 用例
-├── scripts/                        # deploy.sh / backup_legacy.sh / judge_demo.py
-├── docs/                           # JUDGE_GUIDE / ARCHITECTURE / PRD_COVERAGE / DEMO_SCRIPT
-├── AGENTS.md                       # ★ Agent 项目指令（Claude Code / Cursor cascade）
+├── pilot/
+│   ├── runtime/          # IntentRouter · Planner · Orchestrator · Session 状态机
+│   ├── context/          # EventLog · ContextPack · Filesystem Memory
+│   ├── capability/tools/ # doc · slide · canvas · web_media · lark_tools
+│   ├── governance/       # 权限 · 审计 · owner_lock
+│   ├── surface/
+│   │   ├── feishu/       # lark-oapi WS bot · CardKit 卡片
+│   │   ├── dashboard/    # FastAPI SSE Dashboard
+│   │   └── lark_mcp_runner.py  # 反向 MCP server
+│   └── llm/              # MiniMax client · web_search · safe_json
+├── scripts/
+│   ├── server/           # install.sh 一键部署
+│   ├── systemd/          # 3 个 unit
+│   ├── nginx/            # 反代配置
+│   └── run_t20_smoke.py  # T1-T20 烟雾测试
+├── tests/
+│   ├── unit/             # 131 单测
+│   └── competition/      # 7 竞赛 e2e
+├── docs/
+│   ├── DEPLOY.md         # 服务器部署
+│   ├── MCP_USAGE.md      # Cursor/Claude 接入
+│   ├── OPENCLAW_COMPAT.md # OpenClaw 字段对照
+│   └── JUDGE_TEST_REPORT.md # T1-T20 评测
+├── CHANGELOG-v1.5.md
+├── .env.example
 └── README.md
+```
+
+---
+
+## 测试
+
+```bash
+# 全量单测 + e2e
+LLM_MOCK=1 pytest tests/ -q          # 131 + 7 = 138 全绿
+
+# T1-T20 链路烟雾
+LLM_MOCK=1 python scripts/run_t20_smoke.py   # 20/20
+
+# 服务器健康
+curl http://8.136.98.175/health
+curl http://8.136.98.175/tools/list | jq
 ```
 
 ---
 
 ## 文档
 
-- [JUDGE_GUIDE.md](docs/JUDGE_GUIDE.md) — 裁判 5 分钟验收
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — 5 层 Harness 详解 + Claude Code 8 步映射
-- [PRD_COVERAGE.md](docs/PRD_COVERAGE.md) — 队友 3 份 PRD 100% 对照
-- [HARNESS_DESIGN.md](docs/HARNESS_DESIGN.md) — Harness 工程设计专题
-- [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) — 答辩演讲稿
-- [AGENTS.md](AGENTS.md) — Agent 工作指南（在本仓库工作的 AI 应先读）
+- [DEPLOY.md](docs/DEPLOY.md) — 服务器部署 + 故障排查
+- [MCP_USAGE.md](docs/MCP_USAGE.md) — Cursor / Claude Desktop 接入
+- [OPENCLAW_COMPAT.md](docs/OPENCLAW_COMPAT.md) — OpenClaw 卡片协议对照
+- [JUDGE_TEST_REPORT.md](docs/JUDGE_TEST_REPORT.md) — T1-T20 评测报告
+- [CHANGELOG-v1.5.md](CHANGELOG-v1.5.md) — V1.5 完整变更
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — 架构设计
 
 ---
 
-## 设计灵感（已查证）
+## 差异化（vs 其他参赛队）
 
-- Anthropic [Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents) (2024-12)
-- Anthropic [Harness Design for Long-running Apps](https://www.anthropic.com/engineering/harness-design-long-running-apps) (2026-03)
-- [Modern Agent Harness Blueprint 2026](https://gist.github.com/amazingvince/52158d00fb8b3ba1b8476bc62bb562e3)
-- Sid Bharath [The Anatomy of Claude Code](https://sidbharath.com/blog/the-anatomy-of-claude-code/)
-- Cognition [Don't Build Multi-Agents](https://cognition.ai/blog/dont-build-multi-agents)
-- 飞书官方 [`larksuite/cli`](https://github.com/larksuite/cli) · [`larksuite/lark-openapi-mcp`](https://github.com/larksuite/lark-openapi-mcp) · [`larksuite/openclaw-lark`](https://github.com/larksuite/openclaw-lark)
-- [Yjs / pycrdt-websocket](https://github.com/y-crdt/pycrdt-websocket)
+1. **不沉默**：CHAT verdict 兜底，闲聊也有友好回复
+2. **真联网**：DDG + Bing 双兜底，时效词/事件名自动触发 web.search
+3. **真飞书集成**：im.fetch_thread / doc.search / bitable.search 用 OpenAPI，不 vendor 24 SKILL
+4. **反向 MCP**：评委 Cursor 可直接调我们 4 个工具
+5. **诚实**：不夸大命名、不写假集成、CHANGELOG 列清"做了/没做"
 
 ---
 
@@ -226,8 +194,8 @@ Agent-Pilot/
 
 | 成员 | 角色 |
 |------|------|
-| [戴尚好](https://bcefghj.github.io) | 全栈开发 / Agent 安全 / 部署 / 答辩 |
-| [李洁盈](https://janeliii.netlify.app/) | 产品设计 / UI·UX / 内容运营 / 演讲 |
+| [戴尚好](https://bcefghj.github.io) | 全栈开发 / Agent 架构 / 部署 |
+| [李洁盈](https://janeliii.netlify.app/) | 产品设计 / UI·UX / 内容运营 |
 
 ---
 

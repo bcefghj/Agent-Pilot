@@ -146,6 +146,14 @@ TIMELY_RE = re.compile(
     r"2026|2025|2024|今天|昨天|前天|刚才)"
 )
 
+# 实体事件模式：人名/品牌 + 活动/地点 → 大概率需要联网确认最新信息
+# 例："谢娜成都演唱会"、"苹果发布会"、"OpenAI DevDay"
+EVENT_ENTITY_RE = re.compile(
+    r"(演唱会|发布会|音乐节|上市|开幕|闭幕|峰会|论坛|展览|招聘|赛事|"
+    r"比赛|考试|招生|新品|上线|事件|新闻|热搜|八卦|丑闻|事故|政策|"
+    r"股价|行情|天气|疫情|地震|台风)"
+)
+
 TASK_SEMANTIC_PATTERNS = (
     re.compile(r"(帮|麻烦|需要).{0,8}(写|做|生成|整理|汇总|画|画一)"),
     re.compile(r"(下周|这周|明天|后天).{0,8}(汇报|展示|讲|发|给)"),
@@ -256,7 +264,12 @@ def _detect_greeting(text: str) -> bool:
 
 
 def _detect_timely(text: str) -> bool:
-    return bool(TIMELY_RE.search(text))
+    """时效性检测：时效词 OR 实体事件模式（人名+演唱会/发布会等）."""
+    if TIMELY_RE.search(text):
+        return True
+    if EVENT_ENTITY_RE.search(text):
+        return True
+    return False
 
 
 # 占位/客气/语气词（信息充分性判定时剥离）
