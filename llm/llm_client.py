@@ -44,6 +44,12 @@ LLM_FALLBACK_MSG = (
 )
 
 
+def _strip_think_tags(text: str) -> str:
+    """Strip <think>...</think> reasoning blocks from model output."""
+    import re
+    return re.sub(r"<think>[\s\S]*?</think>\s*", "", text).strip()
+
+
 # ── 3-Tier Prompt Cache ──────────────────────────────────────────────────────
 # Tier 1 (stable):  role definition + tool schemas – rarely changes
 # Tier 2 (session): FlowMemory 6-tier + caller-supplied rules – changes per session
@@ -345,7 +351,7 @@ def chat(
                 model=get_active_model(), messages=messages,
                 temperature=temperature, max_tokens=effective_max, timeout=_LLM_TIMEOUT,
             )
-            return resp.choices[0].message.content.strip()
+            return _strip_think_tags(resp.choices[0].message.content.strip())
 
         return _sync_retry(_call, "chat")
     except Exception as e:
@@ -379,7 +385,7 @@ async def async_chat(
                 model=get_active_model(), messages=messages,
                 temperature=temperature, max_tokens=effective_max, timeout=_LLM_TIMEOUT,
             )
-            return resp.choices[0].message.content.strip()
+            return _strip_think_tags(resp.choices[0].message.content.strip())
 
         return await _async_retry(_call, "chat")
     except Exception as e:
