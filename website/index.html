@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent-Pilot · 从 IM 对话到演示稿的一键智能闭环</title>
+<meta name="description" content="Agent-Pilot 是飞书 IM 上的 Multi-Agent 协同办公助手。6 个专业 AI Agent 协作，一句话完成从需求理解到文档/PPT 交付的全链路自动化。2026 飞书 AI 校园挑战赛参赛作品。">
+<meta name="theme-color" content="#fafaf9">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="topbar">
+  <div class="inner">
+    <a href="#top" class="logo"><span class="dot"></span>Agent-Pilot</a>
+    <div class="links">
+      <a href="#problem">痛点</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#features">功能</a>
+      <a href="#demo">Demo</a>
+      <a href="#tech">技术</a>
+      <a href="#team">团队</a>
+      <button class="theme-btn" id="themeToggle" aria-label="Toggle theme">&#9790;</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section id="top" class="hero container">
+  <div class="tag">2026 飞书 AI 校园挑战赛 · 基于 IM 的办公协同智能助手</div>
+  <div class="hero-grid">
+    <div>
+      <h1>从 IM 对话到演示稿的<br/><em>一键智能闭环</em></h1>
+      <p class="subtitle">
+        在飞书里说一句话，6 个专业 AI Agent 自动协作：<br/>
+        <strong>理解意图 &rarr; 规划大纲 &rarr; 联网搜索 &rarr; 撰写内容 &rarr; 质量审核 &rarr; 交付产物</strong><br/><br/>
+        文档、PPT、画布 &mdash; 全链路自动化，90 秒内交付。
+      </p>
+      <div class="cta-row">
+        <a href="#demo" class="btn btn-primary">体验 Live Demo &rarr;</a>
+        <a href="/dashboard" class="btn btn-ghost">查看 Dashboard</a>
+        <a href="https://github.com/bcefghj/Agent-Pilot" target="_blank" rel="noopener" class="btn btn-ghost">GitHub &nearr;</a>
+        <a href="/agent_pilot_report.pdf" class="btn btn-ghost">技术白皮书 PDF</a>
+      </div>
+      <div class="meta-row">
+        <span>由 <strong>李洁盈</strong>（产品/设计）与 <strong>戴尚好</strong>（全栈/Agent/部署）共同打造</span>
+        <span class="sep">&middot;</span>
+        <span>2026/05 &middot; V2.0</span>
+      </div>
+      <div class="stats" id="heroStats"></div>
+    </div>
+
+    <div class="imsim-frame">
+      <div class="imsim-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="title">飞书 &middot; Agent-Pilot &middot; Multi-Agent Pipeline</span>
+        <span class="badge" id="simStateBadge">READY</span>
+      </div>
+      <div class="imsim-body">
+        <div class="imsim-stream" id="simStream"></div>
+        <div class="imsim-controls">
+          <button id="simPlay" title="播放/暂停">&#9654;</button>
+          <button id="simStep" title="单步">&#9197;</button>
+          <button id="simReset" title="重播">&#8635;</button>
+          <div class="progress"><i id="simProgress"></i></div>
+          <span class="label" id="simLabel">0 / 0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- Problem -->
+<section id="problem" class="container reveal">
+  <h2 class="section-title">痛点：从需求到演示稿的<em>漫长旅途</em></h2>
+  <div class="pain-grid">
+    <div class="pain-card">
+      <div class="pain-icon">&#128337;</div>
+      <h3>4-8 小时</h3>
+      <p>传统方式完成一份报告 + PPT 的平均耗时</p>
+    </div>
+    <div class="pain-card">
+      <div class="pain-icon">&#128260;</div>
+      <h3>5+ 应用切换</h3>
+      <p>IM、浏览器、文档、PPT、邮件之间反复跳转</p>
+    </div>
+    <div class="pain-card">
+      <div class="pain-icon">&#128548;</div>
+      <h3>质量不可控</h3>
+      <p>缺乏系统性审核机制，内容质量依赖个人经验</p>
+    </div>
+    <div class="pain-card">
+      <div class="pain-icon">&#128241;</div>
+      <h3>多端不同步</h3>
+      <p>移动端发起的任务，桌面端无法实时跟踪</p>
+    </div>
+  </div>
+  <div class="solution-box reveal">
+    <h3>Agent-Pilot 的答案</h3>
+    <p><strong>AI Agent 是主驾驶（Pilot），GUI 是仪表盘（Co-pilot）。</strong><br/>
+    用户在飞书 IM 中说一句自然语言，Agent 自动完成全链路 &mdash; 从意图理解到飞书文档/PPT 交付，全程 90 秒。</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- Pipeline -->
+<section id="pipeline" class="container reveal">
+  <h2 class="section-title">6 Agent <em>Multi-Agent Pipeline</em></h2>
+  <p class="section-desc">参考 CrewAI 角色分工 + LangGraph TypedDict 共享状态，6 个专业 Agent 各司其职</p>
+
+  <div class="pipeline-flow">
+    <div class="agent-node" data-agent="intent">
+      <div class="agent-icon">&#127919;</div>
+      <h4>IntentAgent</h4>
+      <p>意图识别 &middot; 任务分类</p>
+    </div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="agent-node" data-agent="planner">
+      <div class="agent-icon">&#128203;</div>
+      <h4>PlannerAgent</h4>
+      <p>结构化大纲 &middot; few-shot</p>
+    </div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="agent-node" data-agent="research">
+      <div class="agent-icon">&#128269;</div>
+      <h4>ResearchAgent</h4>
+      <p>MiniMax tool calling<br/>联网搜索</p>
+    </div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="agent-node" data-agent="writer">
+      <div class="agent-icon">&#9997;&#65039;</div>
+      <h4>WriterAgent</h4>
+      <p>章节撰写 &middot; 数据融合</p>
+    </div>
+    <div class="pipe-arrow">&harr;</div>
+    <div class="agent-node" data-agent="review">
+      <div class="agent-icon">&#128260;</div>
+      <h4>ReviewAgent</h4>
+      <p>5 维度自评 &middot; 迭代</p>
+    </div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="agent-node" data-agent="builder">
+      <div class="agent-icon">&#128230;</div>
+      <h4>BuilderAgent</h4>
+      <p>飞书 Doc &middot; PPT &middot; 画布</p>
+    </div>
+  </div>
+
+  <div class="pipeline-detail reveal">
+    <div class="detail-card">
+      <h4>共享 AgentState</h4>
+      <p>所有 Agent 通过 TypedDict 共享状态通信，无隐式依赖</p>
+    </div>
+    <div class="detail-card">
+      <h4>Review 循环</h4>
+      <p>Writer &harr; Reviewer 最多 3 轮迭代，feedback 注入针对性修改</p>
+    </div>
+    <div class="detail-card">
+      <h4>Human-in-the-Loop</h4>
+      <p>大纲确认节点由人把关（CardKit 卡片 Approve/Revise）</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- Features -->
+<section id="features" class="container reveal">
+  <h2 class="section-title">核心功能 &middot; <em>PRD 全覆盖</em></h2>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <span class="f-badge">场景 A</span>
+      <h4>IM 自然语言入口</h4>
+      <p>飞书单聊/群聊直接触发，支持文本指令</p>
+    </div>
+    <div class="feature-card">
+      <span class="f-badge">场景 B</span>
+      <h4>任务理解与规划</h4>
+      <p>PlannerAgent LLM few-shot 生成结构化大纲</p>
+    </div>
+    <div class="feature-card">
+      <span class="f-badge">场景 C</span>
+      <h4>文档自动生成</h4>
+      <p>联网搜索 + 章节撰写 + 自评迭代 + 飞书文档</p>
+    </div>
+    <div class="feature-card">
+      <span class="f-badge">场景 D</span>
+      <h4>PPT 演示稿生成</h4>
+      <p>python-pptx 8 页 PPT，含 speaker notes</p>
+    </div>
+    <div class="feature-card">
+      <span class="f-badge">场景 E</span>
+      <h4>多端协同</h4>
+      <p>Dashboard SSE + Flutter + 飞书 IM 实时同步</p>
+    </div>
+    <div class="feature-card">
+      <span class="f-badge">场景 F</span>
+      <h4>总结与交付</h4>
+      <p>任务摘要 + 耗时 + 产物链接 + 归档</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- Demo -->
+<section id="demo" class="container reveal">
+  <h2 class="section-title"><em>Live Demo</em> &middot; 在线体验</h2>
+  <p class="section-desc">直接与 Agent-Pilot 对话，体验 Multi-Agent Pipeline 的完整流程</p>
+
+  <div class="demo-frame">
+    <div class="demo-bar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="title">Agent-Pilot &middot; Web Chat Demo</span>
+    </div>
+    <div class="demo-body">
+      <div class="chat-messages" id="chatMessages">
+        <div class="msg bot">
+          <div class="msg-avatar">&#129302;</div>
+          <div class="msg-content">
+            <p>你好！我是 Agent-Pilot，你的 AI 办公助手。</p>
+            <p>试试告诉我你想做什么：写报告、做 PPT、或者其他任务。</p>
+          </div>
+        </div>
+      </div>
+      <div class="chat-suggestions">
+        <button class="suggest-btn" data-msg="帮我写一份 AI Agent 技术报告">&#128196; 写份 AI 报告</button>
+        <button class="suggest-btn" data-msg="做一份 8 页飞书开放平台 PPT">&#128202; 做份 PPT</button>
+        <button class="suggest-btn" data-msg="搜索 2026 年 AI Agent 最新进展">&#128269; 联网搜索</button>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="输入你的需求..." autocomplete="off">
+        <button id="chatSend" class="btn btn-primary">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-links reveal">
+    <a href="/dashboard" class="demo-link-card">
+      <h4>&#128202; Dashboard</h4>
+      <p>实时观察 Agent 协作过程</p>
+    </a>
+    <a href="/sse" class="demo-link-card">
+      <h4>&#128295; MCP Server</h4>
+      <p>Cursor / Claude Desktop 接入</p>
+    </a>
+    <a href="/agent_pilot_report.pdf" class="demo-link-card">
+      <h4>&#128214; 技术白皮书</h4>
+      <p>50 页 PDF 完整技术文档</p>
+    </a>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- Tech -->
+<section id="tech" class="container reveal">
+  <h2 class="section-title">技术亮点 &middot; <em>5 大创新</em></h2>
+  <div class="tech-grid">
+    <div class="tech-card">
+      <h4>&#9989; Multi-Agent Pipeline</h4>
+      <p>6 Agent 专业分工 + 共享 AgentState TypedDict + Pipeline 编排。参考 CrewAI 角色分工 + LangGraph 流式编排。</p>
+    </div>
+    <div class="tech-card">
+      <h4>&#9989; LLM 自主 Tool Calling</h4>
+      <p>MiniMax M2.7 function calling 联网搜索。不硬编码搜索关键词，模型自主决定搜什么。</p>
+    </div>
+    <div class="tech-card">
+      <h4>&#9989; 自评迭代（DeepPresenter）</h4>
+      <p>Writer &harr; Reviewer 闭环，5 维度量化评估 + feedback 注入 + 最多 3 轮迭代。</p>
+    </div>
+    <div class="tech-card">
+      <h4>&#9989; Claude Code 错误恢复</h4>
+      <p>Circuit Breaker 熔断 + 指数退避重试 + 步骤预算防死循环 + 上下文压缩防溢出。</p>
+    </div>
+    <div class="tech-card">
+      <h4>&#9989; Human-in-the-Loop</h4>
+      <p>GenSlide (AAAI 2025) 启发，关键决策节点由人把关。CardKit 交互卡片实现 Approve/Revise。</p>
+    </div>
+  </div>
+
+  <div class="arch-box reveal">
+    <h3>四层架构</h3>
+    <pre class="arch-diagram">
+&#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+&#9474;  Surface: &#39134;&#20070; Bot (WS) | Dashboard (SSE) | MCP Server  &#9474;
+&#9500;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508;
+&#9474;  Agent: Intent&#8594;Planner&#8594;Research&#8594;Writer&#8596;Review&#8594;Builder &#9474;
+&#9500;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508;
+&#9474;  Capability: doc | slide | canvas | web_search | lark  &#9474;
+&#9500;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508;
+&#9474;  Infra: MiniMax | CircuitBreaker | EventLog | Session  &#9474;
+&#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;</pre>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- Team -->
+<section id="team" class="container reveal">
+  <h2 class="section-title"><em>团队</em></h2>
+  <div class="team-grid">
+    <div class="team-card">
+      <div class="avatar-placeholder">&#128100;</div>
+      <h4>李洁盈</h4>
+      <span class="role">产品 / 设计</span>
+      <p>产品设计、UI/UX、用户体验优化、竞品调研分析、内容运营策略</p>
+      <div class="team-links">
+        <a href="mailto:JieyingLiii@outlook.com">Email</a>
+        <a href="https://github.com/Jane-0213" target="_blank">GitHub</a>
+        <a href="https://janeliii.netlify.app" target="_blank">主页</a>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="avatar-placeholder">&#128100;</div>
+      <h4>戴尚好</h4>
+      <span class="role">全栈 / Agent / 部署</span>
+      <p>Multi-Agent Pipeline 架构、MiniMax 集成、飞书 Bot、服务器部署、CI/CD</p>
+      <div class="team-links">
+        <a href="mailto:bcefghj@163.com">Email</a>
+        <a href="https://github.com/bcefghj" target="_blank">GitHub</a>
+        <a href="https://bcefghj.github.io" target="_blank">主页</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="inner">
+    <span>Agent-Pilot V2.0 &middot; MIT License &middot; 2026</span>
+    <span class="sep">&middot;</span>
+    <a href="https://github.com/bcefghj/Agent-Pilot" target="_blank">GitHub</a>
+    <span class="sep">&middot;</span>
+    <a href="/dashboard">Dashboard</a>
+    <span class="sep">&middot;</span>
+    <a href="/agent_pilot_report.pdf">PDF</a>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -5,6 +5,17 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-V2.0-orange.svg)]()
+[![Demo](https://img.shields.io/badge/Live_Demo-8.136.98.175-blue.svg)](http://8.136.98.175)
+[![PDF](https://img.shields.io/badge/技术白皮书-PDF-red.svg)](http://8.136.98.175/agent_pilot_report.pdf)
+
+## 在线体验
+
+| 入口 | 链接 | 说明 |
+|------|------|------|
+| **产品介绍** | [http://8.136.98.175](http://8.136.98.175) | 产品全景 + Live Demo 对话体验 |
+| **Dashboard** | [http://8.136.98.175/dashboard](http://8.136.98.175/dashboard) | 实时 Agent 协作可视化 |
+| **技术白皮书** | [http://8.136.98.175/agent_pilot_report.pdf](http://8.136.98.175/agent_pilot_report.pdf) | 50 页 A4 PDF |
+| **MCP Server** | `http://8.136.98.175/sse` | Cursor / Claude Desktop 接入 |
 
 ---
 

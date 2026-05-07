@@ -224,10 +224,74 @@ def create_app():
         from pilot.surface.sync.hub import default_hub
         return default_hub().stats()
 
+    # ── Web Chat Demo API ──
+    @app.post("/api/chat")
+    async def web_chat(request):
+        """Web Demo: 接收用户消息，触发简化版 Pipeline，返回 SSE 流。"""
+        from pydantic import BaseModel
+
+        body = await request.json()
+        user_msg = body.get("message", "").strip()
+        if not user_msg:
+            return JSONResponse({"error": "empty message"}, status_code=400)
+
+        async def chat_stream():
+            import uuid as _uuid
+            plan_id = f"demo_{int(time.time())}_{_uuid.uuid4().hex[:6]}"
+            yield f"data: {json.dumps({'type': 'start', 'plan_id': plan_id})}\n\n"
+
+            try:
+                from pilot.agents.intent import IntentAgent
+                from pilot.agents.base import AgentState
+
+                state: AgentState = {"intent": user_msg, "task_type": "", "plan_id": plan_id}
+                yield f"data: {json.dumps({'type': 'agent', 'agent': 'IntentAgent', 'status': 'start'})}\n\n"
+
+                intent_agent = IntentAgent()
+                state = await intent_agent.execute(state)
+                task_type = state.get("task_type", "doc")
+                yield f"data: {json.dumps({'type': 'agent', 'agent': 'IntentAgent', 'status': 'done', 'task_type': task_type})}\n\n"
+
+                from pilot.agents.planner import PlannerAgent
+                yield f"data: {json.dumps({'type': 'agent', 'agent': 'PlannerAgent', 'status': 'start'})}\n\n"
+                planner = PlannerAgent()
+                state = await planner.execute(state)
+                outline = state.get("outline", [])
+                yield f"data: {json.dumps({'type': 'agent', 'agent': 'PlannerAgent', 'status': 'done', 'outline_count': len(outline)})}\n\n"
+
+                from pilot.agents.researcher import ResearchAgent
+                yield f"data: {json.dumps({'type': 'agent', 'agent': 'ResearchAgent', 'status': 'start'})}\n\n"
+                researcher = ResearchAgent()
+                state["research_results"] = []
+                state = await researcher.execute(state)
+                yield f"data: {json.dumps({'type': 'agent', 'agent': 'ResearchAgent', 'status': 'done', 'results_count': len(state.get('research_results', []))})}\n\n"
+
+                from pilot.agents.writer import WriterAgent
+                yield f"data: {json.dumps({'type': 'agent', 'agent': 'WriterAgent', 'status': 'start'})}\n\n"
+                writer = WriterAgent()
+                state["draft_sections"] = []
+                state = await writer.execute(state)
+                total_chars = sum(len(s.get("content", "")) for s in state.get("draft_sections", []))
+                yield f"data: {json.dumps({'type': 'agent', 'agent': 'WriterAgent', 'status': 'done', 'total_chars': total_chars})}\n\n"
+
+                yield f"data: {json.dumps({'type': 'done', 'plan_id': plan_id, 'task_type': task_type, 'outline_count': len(outline), 'total_chars': total_chars})}\n\n"
+
+            except Exception as e:
+                logger.error("Web chat error: %s", e)
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)[:200]})}\n\n"
+
+        return StreamingResponse(chat_stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
     # ── Artifacts ──
     artifacts_dir = DATA_DIR / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/artifacts", StaticFiles(directory=str(artifacts_dir)), name="artifacts")
+
+    # ── Website (product page) ──
+    website_dir = ROOT / "website"
+    if website_dir.exists():
+        app.mount("/site", StaticFiles(directory=str(website_dir), html=True), name="website")
 
     # ── Static UI ──
     if STATIC_DIR.exists():
