@@ -92,11 +92,13 @@ class BuilderAgent(BaseAgent):
             _ctx=ctx,
         )
 
+        url = create_result.get("url", "")
         return {
+            "kind": "doc",
             "type": "doc",
             "title": title,
             "doc_token": doc_token,
-            "url": create_result.get("url", ""),
+            "url": url,
             "source": create_result.get("source", "local"),
             "wrote_blocks": append_result.get("wrote_blocks", 0),
             "markdown_chars": len(full_md),
@@ -142,10 +144,12 @@ class BuilderAgent(BaseAgent):
                     logger.warning("PPT drive upload failed: %s", e)
 
         return {
+            "kind": "slide",
             "type": "ppt",
             "title": title,
             "slide_id": result.get("slide_id", ""),
             "pages": result.get("pages", 0),
+            "url": pptx_url,
             "pptx_url": pptx_url,
             "pptx_path": result.get("pptx_path", ""),
         }
@@ -196,10 +200,12 @@ class BuilderAgent(BaseAgent):
     def _build_archive(title: str, artifacts: list[dict[str, Any]]) -> dict[str, Any]:
         """trio 模式：创建归档记录。"""
         return {
+            "kind": "archive",
             "type": "archive",
             "title": f"{title} · 三件套归档",
+            "url": "",
             "items": [
-                {"type": a.get("type", ""), "url": a.get("url", "") or a.get("pptx_url", "")}
+                {"kind": a.get("kind", ""), "url": a.get("url", "")}
                 for a in artifacts
             ],
             "created_at": int(time.time()),
